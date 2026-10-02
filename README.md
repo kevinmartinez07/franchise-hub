@@ -32,7 +32,7 @@ La solución expone operaciones para crear y consultar franquicias, sucursales y
 | Infraestructura como código | Terraform |
 | Despliegue cloud | AWS ECR + ECS/Fargate + CodePipeline/CodeBuild + MongoDB Atlas |
 | Flujo Git | ramas, Pull Requests, CI y `main` como fuente del CD |
-| Documentación local | este README + carpeta `docs/` |
+| Documentación local | este README |
 
 ## 3. Stack
 
@@ -92,7 +92,6 @@ ApiResponse<T>
 
 Los DTOs `FranchiseDto`, `BranchDto`, `ProductDto` y `MaxStockProductDto` representan datos distintos del dominio; no existen wrappers HTTP repetidos por cada entidad.
 
-Más detalle: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## 5. Ejecución local recomendada: Docker Compose
 
@@ -437,13 +436,30 @@ No se usan ALB, NAT Gateway, EC2, EKS, RDS ni DocumentDB para esta prueba.
 
 Para la evaluación, `atlas_allow_public_runtime=true` puede crear temporalmente `0.0.0.0/0` en Atlas porque una task Fargate con IP pública no tiene una IP de salida fija. Esto **no es una recomendación de producción**. En producción se preferiría conectividad privada o un egress controlado.
 
-## 16. Despliegue desde cero
+## 16. Bootstrap cloud (resumen)
 
-No ejecutar esta sección como parte del flujo diario. Es bootstrap.
+El aprovisionamiento de infraestructura se realiza con Terraform y es independiente del despliegue cotidiano de la aplicación.
 
-Guía completa, incluyendo AWS SSO, Atlas, Terraform, CodeConnection, Secrets Manager, CodePipeline, arranque de ECS y troubleshooting:
+Flujo general de bootstrap:
 
-[docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md)
+1. Configurar las credenciales de AWS y MongoDB Atlas fuera del repositorio.
+2. Ejecutar `terraform init`, `terraform validate` y revisar `terraform plan`.
+3. Aplicar la infraestructura inicialmente con `enable_service=false`.
+4. Autorizar una única vez la conexión de GitHub creada por AWS CodeConnections.
+5. Cargar los secretos de runtime en AWS Secrets Manager.
+6. Habilitar el servicio ECS cuando la imagen y los secretos estén disponibles.
+
+Ejemplo de validación:
+
+```powershell
+terraform -chdir=terraform init -backend=false
+terraform -chdir=terraform validate
+terraform -chdir=terraform plan
+```
+
+El despliegue normal de nuevas versiones no requiere repetir el bootstrap: un cambio integrado a `main` activa CodePipeline, CodeBuild, publicación en ECR y actualización del servicio ECS.
+
+No se almacenan credenciales de AWS, MongoDB Atlas, JWT ni contraseñas reales en el repositorio.
 
 ## 17. Variables de entorno de aplicación
 
@@ -485,29 +501,3 @@ Dockerfile                imagen de aplicación
 compose.yaml              ejecución local
 buildspec.yml             CodeBuild
 ```
-
-## 19. Documentación para estudiar el proyecto
-
-- [Arquitectura y decisiones](docs/ARCHITECTURE.md)
-- [Runbook de despliegue y recuperación](docs/DEPLOYMENT_RUNBOOK.md)
-- [Guía de estudio para sustentación/entrevista](docs/STUDY_GUIDE.md)
-- [Trazabilidad de requisitos](docs/REQUIREMENTS_TRACEABILITY.md)
-
-## 20. Qué debe poder explicar el autor
-
-Al sustentar este proyecto, las ideas centrales son:
-
-- por qué WebFlux usa `Mono` y `Flux`;
-- diferencia entre `map`, `flatMap`, `flatMapMany` y `switchIfEmpty`;
-- por qué los handlers dependen de repository ports;
-- cómo Mongo adapters implementan esos puertos;
-- por qué se separan domain model y Mongo document;
-- cómo funciona el JWT;
-- diferencia entre CI y CD;
-- qué hace CodePipeline y qué hace CodeBuild;
-- para qué sirven ECR, ECS/Fargate, Secrets Manager e IAM;
-- cómo Terraform construye la infraestructura;
-- qué trade-offs existen en el networking de evaluación;
-- por qué el deploy cotidiano no debería repetir el bootstrap manual.
-
-La guía de estudio desarrolla cada uno de estos temas paso a paso.
