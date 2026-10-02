@@ -615,6 +615,8 @@ No se guardan PATs ni tokens GitHub en Terraform, GitHub Actions o el repositori
 
 CodePipeline sólo escucha cambios reales en `main`. No se configuran triggers para `dev`, ramas feature ni Pull Requests.
 
+CodePipeline actualiza las revisiones de ECS Task Definition; Terraform ignora únicamente el drift de `task_definition`, mientras `desired_count` continúa administrado por Terraform. El bucket S3 de artifacts y el repositorio ECR permiten limpieza con `terraform destroy` al finalizar la evaluación.
+
 El `buildspec.yml` ejecuta Checkstyle, tests, package, Docker build y publica en ECR los tags del commit y `latest`. El artifact mínimo es `imagedefinitions.json`, cuyo container name coincide exactamente con `franchise-hub`.
 
 ### Bootstrap posterior

@@ -190,13 +190,24 @@ data "aws_iam_policy_document" "codepipeline" {
   }
 
   statement {
+    actions   = ["ecs:TagResource"]
+    resources = ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${var.app_name}:*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ecs:CreateAction"
+      values   = ["RegisterTaskDefinition"]
+    }
+  }
+
+  statement {
     actions   = ["iam:PassRole"]
     resources = [aws_iam_role.ecs_task_execution.arn]
 
     condition {
       test     = "StringEquals"
       variable = "iam:PassedToService"
-      values   = ["ecs-tasks.amazonaws.com"]
+      values   = ["ecs.amazonaws.com", "ecs-tasks.amazonaws.com"]
     }
   }
 }
