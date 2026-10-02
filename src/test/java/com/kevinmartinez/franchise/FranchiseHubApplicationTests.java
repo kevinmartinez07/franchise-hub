@@ -8,6 +8,9 @@ import com.kevinmartinez.franchise.infrastructure.persistence.mongo.repository.R
 import com.kevinmartinez.franchise.infrastructure.persistence.mongo.repository.ReactiveProductMongoRepository;
 
 @SpringBootTest(properties = {
+        "FRANCHISE_APP_USERNAME=reviewer",
+        "FRANCHISE_APP_PASSWORD=test-only-password",
+        "JWT_SECRET=test-only-franchise-hub-secret-with-more-than-32-bytes",
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,"
                 + "org.springframework.boot.autoconfigure.mongo.MongoDataAutoConfiguration,"
