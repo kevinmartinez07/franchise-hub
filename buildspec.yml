@@ -14,6 +14,7 @@ phases:
   build:
     commands:
       - ./mvnw checkstyle:check
+      - export TEST_MONGO_IMAGE="public.ecr.aws/docker/library/mongo:8.0"
       - ./mvnw clean test
       - ./mvnw package -DskipTests
       - docker build --tag "${ECR_REPOSITORY_URI}:${IMAGE_TAG}" --tag "${ECR_REPOSITORY_URI}:latest" .
