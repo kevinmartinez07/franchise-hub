@@ -1,66 +1,200 @@
 # Franchise Hub
 
-API reactiva para administrar franquicias, sucursales, productos y stock.
-La aplicación está construida con Java 21, Spring WebFlux y MongoDB reactivo.
+Franchise Hub es una API REST reactiva para administrar franquicias,
+sucursales, productos y stock.
 
-## Stack
+Está construida con Java 21, Spring Boot WebFlux y MongoDB reactivo.
+
+## Stack principal
 
 - Java 21
 - Spring Boot 3.5
 - Spring WebFlux y Project Reactor
 - Spring Data Reactive MongoDB
-- MongoDB
 - Spring Security y JWT
+- OpenAPI / Swagger
 - Maven Wrapper
 - Docker y Docker Compose
 - JUnit 5, Reactor Test y Testcontainers
 - Terraform
-- AWS
+- AWS ECS/Fargate, ECR, Secrets Manager, CloudWatch, CodeBuild y CodePipeline
+- MongoDB Atlas M0
 
 ## Arquitectura
 
 El proyecto separa las responsabilidades en cuatro capas:
 
-- `presentation`: controllers, DTOs HTTP y manejo de errores.
-- `application`: casos de uso, handlers y contratos de persistencia.
-- `domain`: entidades y reglas de negocio sin dependencias de Spring o MongoDB.
-- `infrastructure`: adaptadores MongoDB, seguridad JWT y configuración externa.
+- `presentation`: controllers, contratos HTTP y manejo de errores.
+- `application`: casos de uso, commands, queries, handlers y contratos de repositorio.
+- `domain`: entidades y reglas de negocio sin dependencia directa de Spring o MongoDB.
+- `infrastructure`: persistencia MongoDB reactiva, seguridad JWT y configuración.
 
 ```text
-HTTP -> Presentation -> Application -> Repository Port
-                                      -> Mongo Adapter -> MongoDB
+HTTP -> presentation -> application -> repository port
+                                      -> infrastructure -> MongoDB
 ```
 
-Los controllers reciben HTTP, Application coordina los casos de uso y los
-adaptadores implementan las salidas técnicas. El flujo mantiene la reactividad
-desde WebFlux hasta Spring Data Reactive MongoDB mediante `Mono` y `Flux`.
+El flujo permanece reactivo desde WebFlux hasta MongoDB utilizando `Mono` y
+`Flux`.
 
-## Requisitos
+## Decisiones técnicas
 
-### Con Docker
+### Spring Boot y Java 21
+
+Spring Boot permite construir la API aprovechando el ecosistema de Spring para
+HTTP, validación, seguridad, persistencia y pruebas sin añadir configuración
+innecesaria. Java 21 se utiliza como versión LTS compatible con la versión de
+Spring Boot del proyecto.
+
+### WebFlux y Project Reactor
+
+La API utiliza un modelo reactivo: controllers y casos de uso trabajan con
+`Mono` y `Flux`, y Spring Data Reactive MongoDB mantiene el mismo modelo en la
+persistencia. Así se conserva un flujo no bloqueante desde HTTP hasta MongoDB.
+El objetivo no fue introducir complejidad por moda, sino mantener coherencia
+entre la capa HTTP y la persistencia reactiva.
+
+### MongoDB
+
+MongoDB es una alternativa permitida para la persistencia de la prueba y tiene
+integración reactiva directa mediante Spring Data. Localmente se ejecuta con
+Docker Compose y en cloud se utiliza MongoDB Atlas, manteniendo el mismo modelo
+de persistencia en ambos entornos.
+
+### Separación por capas
+
+Los controllers se ocupan de HTTP, Application coordina los casos de uso,
+Domain contiene entidades y reglas, e Infrastructure concentra detalles como
+MongoDB y seguridad. El dominio y los casos de uso no dependen directamente de
+los controllers ni de la implementación MongoDB. Los contratos de repositorio
+se definen fuera del adaptador MongoDB.
+
+### Commands, Queries y Handlers
+
+Los controllers delegan los casos de uso a handlers. Las operaciones de
+escritura y lectura se organizan mediante commands y queries para mantener los
+controllers enfocados en HTTP. Es una separación interna de responsabilidades:
+no se implementó un bus de mensajes, CQRS distribuido ni un componente
+Mediator.
+
+### JWT
+
+La prueba no solicita gestión de usuarios, por lo que no se implementaron
+registro, CRUD ni administración de usuarios. JWT se añadió para proteger los
+endpoints funcionales mediante un usuario técnico configurable con
+`FRANCHISE_APP_USERNAME` y `FRANCHISE_APP_PASSWORD`.
+
+El flujo es `POST /api/auth/login`, validación de credenciales, generación del
+JWT y uso posterior como Bearer Token. Esto permite demostrar autenticación sin
+ampliar el alcance con un módulo completo de usuarios.
+
+### Docker y Docker Compose
+
+Docker permite ejecutar el proyecto de forma reproducible. Docker Compose
+inicia MongoDB, construye la API y configura la comunicación entre ambos
+servicios, sin que el evaluador tenga que instalar Java, Maven y MongoDB para
+la ejecución local recomendada.
+
+### Testcontainers
+
+Los tests de integración de persistencia utilizan una instancia real de MongoDB
+en un contenedor. De esta forma no dependen de una base externa compartida, de
+datos existentes ni de una configuración manual de MongoDB para esos tests.
+
+### OpenAPI y Swagger
+
+Swagger permite inspeccionar endpoints, revisar requests y responses, ejecutar
+operaciones desde el navegador y probar JWT sin depender de Postman. La ruta
+`/v3/api-docs` corresponde a OpenAPI 3; no representa una versión v3 de la API
+de negocio.
+
+### Terraform
+
+Terraform define la infraestructura cloud como código. Esto documenta los
+recursos, evita depender sólo de configuraciones manuales en consola y permite
+revisar la infraestructura mediante archivos versionados.
+
+### ECR y ECS/Fargate
+
+La aplicación se empaqueta como imagen Docker, ECR almacena esa imagen y
+ECS/Fargate ejecuta el contenedor. Fargate permite ejecutar la task sin
+administrar directamente una instancia EC2.
+
+### AWS Secrets Manager
+
+Los valores sensibles del entorno desplegado no se incluyen en la imagen ni en
+el código. ECS los obtiene desde Secrets Manager, incluyendo `MONGODB_URI`,
+`JWT_SECRET`, `FRANCHISE_APP_USERNAME` y `FRANCHISE_APP_PASSWORD`.
+
+### CI/CD
+
+GitHub Actions valida el código. CodePipeline orquesta el despliegue desde
+`main`, CodeBuild ejecuta la construcción, pruebas y publicación de la imagen,
+ECR almacena la imagen y ECS/Fargate ejecuta la nueva versión.
+
+```text
+main -> CodePipeline -> CodeBuild -> ECR -> ECS/Fargate
+```
+
+La separación permite que los cambios superen las validaciones antes de llegar
+al despliegue.
+
+## Requisitos previos
+
+### Opción recomendada: Docker
+
+Debes tener instalados:
 
 - Git
-- Docker Engine o Docker Desktop con Docker Compose
+- Docker Desktop o Docker Engine
+- Docker Compose
 
-### Sin Docker
+Con Docker no necesitas instalar Java, Maven ni MongoDB localmente. Docker
+Compose levanta MongoDB y la API.
 
+### Opción sin Docker
+
+Debes tener:
+
+- Git
 - Java 21
-- MongoDB local disponible
-- Maven Wrapper, incluido en el repositorio
+- MongoDB local iniciado y accesible
 
-## Ejecución local con Docker
+No necesitas instalar Maven globalmente porque el repositorio incluye Maven
+Wrapper (`mvnw` y `mvnw.cmd`).
 
-Esta es la forma recomendada para ejecutar el proyecto. Levanta MongoDB y la
-API con una configuración local reproducible.
+## Ejecutar localmente con Docker
+
+Esta es la forma recomendada para evaluar el proyecto localmente.
+
+Todos los comandos de esta sección deben ejecutarse desde la raíz del
+repositorio, es decir, desde la carpeta que contiene `pom.xml`.
 
 ### 1. Clonar el repositorio
+
+Abre una terminal y ejecuta:
 
 ```bash
 git clone https://github.com/kevinmartinez07/franchise-hub.git
 cd franchise-hub
 ```
 
-### 2. Preparar las variables locales
+En esa carpeta deben existir, entre otros:
+
+```text
+pom.xml
+compose.yaml
+Dockerfile
+mvnw
+mvnw.cmd
+.env.example
+src/
+terraform/
+```
+
+### 2. Crear el archivo `.env`
+
+El repositorio incluye `.env.example`. Crea una copia llamada `.env`.
 
 Windows PowerShell:
 
@@ -74,66 +208,284 @@ Linux/macOS:
 cp .env.example .env
 ```
 
-`.env.example` contiene credenciales ficticias para evaluación local. No usar
-estos valores en un entorno compartido o productivo.
+El `.env` local debe contener valores equivalentes a estos:
 
-### 3. Iniciar la aplicación
+```env
+JWT_SECRET=local-only-example-secret-for-franchise-hub-32-bytes
+FRANCHISE_APP_USERNAME=reviewer
+FRANCHISE_APP_PASSWORD=reviewer123
+MONGODB_URI=mongodb://localhost:27017/franchise_hub
+JWT_EXPIRATION=PT30M
+JWT_ISSUER=franchise-hub
+JWT_AUDIENCE=franchise-hub-api
+```
+
+Estas credenciales son ficticias y sólo sirven para ejecución local.
+
+```text
+Usuario local: reviewer
+Contraseña local: reviewer123
+```
+
+No cambies la URI local por una URI de producción para ejecutar esta guía.
+
+### 3. Construir e iniciar la aplicación
+
+Desde la raíz del repositorio ejecuta:
 
 ```bash
 docker compose up --build -d
 ```
 
-Comprobar el estado:
+El comando inicia MongoDB, construye la imagen de la API, inicia Spring Boot y
+publica la API en el puerto `8080`.
+
+### 4. Verificar los contenedores
+
+Ejecuta:
 
 ```bash
 docker compose ps
 ```
 
-Consultar logs si es necesario:
+Debes ver los servicios `mongo` y `api` en ejecución. Si la API todavía está
+iniciando, espera unos segundos y consulta nuevamente.
+
+Para consultar los logs de la API:
 
 ```bash
 docker compose logs -f api
 ```
 
-### 4. Verificar la API
+Para salir de los logs sin detener el contenedor pulsa `Ctrl+C`.
 
-Health:
+### 5. Verificar el health check
+
+Abre esta URL en el navegador:
 
 ```text
 http://localhost:8080/actuator/health
 ```
 
-La respuesta esperada contiene `{"status":"UP"}`.
+También puedes ejecutar:
 
-Swagger UI:
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+El resultado esperado es HTTP `200` y un cuerpo que contenga:
+
+```json
+{
+  "status": "UP"
+}
+```
+
+Si no aparece `UP`, revisa los logs con `docker compose logs -f api` antes de
+continuar.
+
+### 6. Abrir Swagger y OpenAPI
+
+Con la API saludable, abre Swagger UI:
 
 ```text
 http://localhost:8080/swagger-ui.html
 ```
 
-OpenAPI:
+La especificación OpenAPI está disponible en:
 
 ```text
 http://localhost:8080/v3/api-docs
 ```
 
-### 5. Detener la aplicación
+`/v3/api-docs` es la ruta de la especificación OpenAPI; no representa una
+versión `v3` de los endpoints de negocio.
+
+### 7. Detener la aplicación
+
+Cuando termines la evaluación ejecuta desde la raíz:
 
 ```bash
 docker compose down
 ```
 
-El comando conserva el volumen local de MongoDB.
+El comando detiene los contenedores y conserva el volumen local de MongoDB.
 
-## Ejecución sin Docker
+## Autenticación local
 
-Se necesita una instancia MongoDB escuchando en:
+La prueba técnica no solicita gestión de usuarios, por lo que el proyecto no
+implementa registro ni CRUD de usuarios.
+
+JWT se utiliza para proteger los endpoints funcionales. El usuario técnico de
+evaluación se configura mediante:
+
+- `FRANCHISE_APP_USERNAME`
+- `FRANCHISE_APP_PASSWORD`
+
+En el entorno local creado con `.env.example`, utiliza `reviewer` y
+`reviewer123`.
+
+### 1. Ejecutar el login desde Swagger
+
+1. Abre `http://localhost:8080/swagger-ui.html`.
+2. Busca `POST /api/auth/login`.
+3. Pulsa **Try it out**.
+4. Introduce este body:
+
+```json
+{
+  "username": "reviewer",
+  "password": "reviewer123"
+}
+```
+
+5. Pulsa **Execute**.
+6. Verifica que la respuesta sea HTTP `200`.
+
+La respuesta incluye el JWT en `data.accessToken`:
+
+```json
+{
+  "success": true,
+  "message": "Autenticación exitosa",
+  "data": {
+    "accessToken": "<TOKEN>",
+    "tokenType": "Bearer",
+    "expiresIn": 1800
+  }
+}
+```
+
+### 2. Autorizar Swagger
+
+1. Copia únicamente el valor de `data.accessToken`.
+2. No copies las comillas, el objeto JSON completo ni la palabra `Bearer`.
+3. Pulsa **Authorize** en la parte superior de Swagger.
+4. Pega únicamente el token.
+5. Pulsa **Authorize** y luego **Close**.
+6. Ejecuta `GET /api/franchises`.
+7. Verifica que la respuesta sea HTTP `200`.
+
+Los endpoints protegidos utilizan el header:
+
+```text
+Authorization: Bearer <TOKEN>
+```
+
+## Flujo funcional mínimo
+
+Después de autorizar Swagger, ejecuta las operaciones siguientes en orden. Los
+identificadores se obtienen de la respuesta de cada creación y se utilizan en
+la operación siguiente.
+
+### 1. Crear una franquicia
+
+Ejecuta `POST /api/franchises` con:
+
+```json
+{
+  "name": "Franquicia Demo"
+}
+```
+
+Copia `data.id` de la respuesta. Ese valor será `FRANCHISE_ID`.
+
+### 2. Crear una sucursal
+
+Ejecuta `POST /api/branches` con este body, reemplazando el marcador:
+
+```json
+{
+  "franchiseId": "<FRANCHISE_ID>",
+  "name": "Sucursal Centro"
+}
+```
+
+Copia `data.id` de la respuesta. Ese valor será `BRANCH_ID`.
+
+### 3. Crear un producto
+
+Ejecuta `POST /api/products` con:
+
+```json
+{
+  "branchId": "<BRANCH_ID>",
+  "name": "Producto Demo",
+  "stock": 10
+}
+```
+
+Copia `data.id` de la respuesta. Ese valor será `PRODUCT_ID`.
+
+### 4. Modificar el stock
+
+Ejecuta `PATCH /api/products/<PRODUCT_ID>/stock` con:
+
+```json
+{
+  "stock": 30
+}
+```
+
+Reemplaza `<PRODUCT_ID>` por el identificador real del producto.
+
+### 5. Consultar el mayor stock por sucursal
+
+Ejecuta:
+
+```text
+GET /api/products/max-stock?franchiseId=<FRANCHISE_ID>
+```
+
+Reemplaza `<FRANCHISE_ID>` por el identificador real de la franquicia. La
+respuesta identifica el producto con mayor stock de cada sucursal de esa
+franquicia.
+
+## Endpoints
+
+El detalle de los contratos, cuerpos y respuestas está disponible en Swagger.
+
+| Método | Ruta | Descripción | Acceso |
+| --- | --- | --- | --- |
+| `POST` | `/api/auth/login` | Obtener JWT | Público |
+| `POST` | `/api/franchises` | Crear franquicia | JWT |
+| `GET` | `/api/franchises` | Listar franquicias | JWT |
+| `GET` | `/api/franchises/{franchiseId}` | Consultar franquicia | JWT |
+| `PATCH` | `/api/franchises/{franchiseId}/name` | Renombrar franquicia | JWT |
+| `POST` | `/api/branches` | Crear sucursal | JWT |
+| `GET` | `/api/branches` | Listar sucursales | JWT |
+| `GET` | `/api/branches/{branchId}` | Consultar sucursal | JWT |
+| `PATCH` | `/api/branches/{branchId}/name` | Renombrar sucursal | JWT |
+| `POST` | `/api/products` | Crear producto | JWT |
+| `GET` | `/api/products` | Listar productos | JWT |
+| `GET` | `/api/products/{productId}` | Consultar producto | JWT |
+| `PATCH` | `/api/products/{productId}/stock` | Modificar stock | JWT |
+| `PATCH` | `/api/products/{productId}/name` | Renombrar producto | JWT |
+| `DELETE` | `/api/products/{productId}` | Eliminar producto | JWT |
+| `GET` | `/api/products/max-stock?franchiseId={id}` | Mayor stock por sucursal | JWT |
+
+`GET /api/branches` y `GET /api/products` admiten los filtros documentados en
+Swagger.
+
+## Validaciones y errores
+
+- Los nombres e identificadores requeridos no pueden estar vacíos.
+- El stock debe ser mayor o igual que cero.
+- Los requests se validan mediante Bean Validation.
+- Los errores HTTP se centralizan mediante `ProblemDetail`.
+
+## Ejecutar sin Docker
+
+Esta opción necesita MongoDB local iniciado y escuchando en el puerto `27017`.
+La aplicación utilizará la base `franchise_hub` mediante esta URI:
 
 ```text
 mongodb://localhost:27017/franchise_hub
 ```
 
-Windows PowerShell:
+Los comandos siguientes deben ejecutarse desde la raíz del repositorio.
+
+### Windows PowerShell
 
 ```powershell
 $env:MONGODB_URI="mongodb://localhost:27017/franchise_hub"
@@ -146,7 +498,7 @@ $env:FRANCHISE_APP_PASSWORD="reviewer123"
 .\mvnw.cmd spring-boot:run
 ```
 
-Linux/macOS:
+### Linux/macOS
 
 ```bash
 export MONGODB_URI="mongodb://localhost:27017/franchise_hub"
@@ -159,113 +511,55 @@ export FRANCHISE_APP_PASSWORD="reviewer123"
 ./mvnw spring-boot:run
 ```
 
-La API queda disponible en `http://localhost:8080`.
-
-## Autenticación
-
-La prueba técnica no exige gestión de usuarios, por lo que el proyecto no
-incluye un CRUD de usuarios. JWT protege los endpoints funcionales mediante un
-usuario técnico configurable por variables de entorno:
-
-- `FRANCHISE_APP_USERNAME`
-- `FRANCHISE_APP_PASSWORD`
-
-El login es público:
-
-```http
-POST /api/auth/login
-Content-Type: application/json
-```
-
-```json
-{
-  "username": "reviewer",
-  "password": "reviewer123"
-}
-```
-
-Los endpoints protegidos requieren:
+Cuando Spring Boot indique que inició correctamente, valida:
 
 ```text
-Authorization: Bearer <TOKEN>
-```
-
-Las credenciales locales de `.env.example` son `reviewer / reviewer123` y son
-ficticias. La contraseña del entorno desplegado se comparte por separado; no
-se versionan contraseñas reales ni JWT.
-
-## Endpoints
-
-El detalle de los contratos está disponible en Swagger UI.
-
-| Método | Endpoint | Acceso |
-| --- | --- | --- |
-| `POST` | `/api/auth/login` | Público |
-| `POST`, `GET` | `/api/franchises` | JWT |
-| `GET` | `/api/franchises/{id}` | JWT |
-| `PATCH` | `/api/franchises/{id}/name` | JWT |
-| `POST`, `GET` | `/api/branches` | JWT |
-| `GET` | `/api/branches/{id}` | JWT |
-| `PATCH` | `/api/branches/{id}/name` | JWT |
-| `POST`, `GET` | `/api/products` | JWT |
-| `GET` | `/api/products/{id}` | JWT |
-| `PATCH` | `/api/products/{id}/stock` | JWT |
-| `PATCH` | `/api/products/{id}/name` | JWT |
-| `DELETE` | `/api/products/{id}` | JWT |
-| `GET` | `/api/products/max-stock?franchiseId=...` | JWT |
-
-## Validaciones y errores
-
-- Los nombres e identificadores requeridos no pueden estar vacíos.
-- El stock debe ser mayor o igual que cero.
-- Los requests se validan mediante Bean Validation.
-- Los errores HTTP se centralizan con respuestas `ProblemDetail`.
-
-Los recursos inexistentes y las solicitudes no válidas se informan mediante el
-código HTTP correspondiente. Swagger documenta los cuerpos de cada operación.
-
-## Tests y calidad
-
-Windows PowerShell:
-
-```powershell
-.\mvnw.cmd clean test
-.\mvnw.cmd checkstyle:check
-```
-
-Linux/macOS:
-
-```bash
-./mvnw clean test
-./mvnw checkstyle:check
-```
-
-Los tests de persistencia usan Testcontainers con MongoDB cuando Docker está
-disponible. También se puede generar el artefacto compilado con:
-
-```bash
-./mvnw clean package
+http://localhost:8080/actuator/health
 ```
 
 ## Variables de entorno
 
-| Variable | Obligatoria | Uso |
-| --- | --- | --- |
-| `MONGODB_URI` | No | URI de MongoDB. Tiene un valor local por defecto. |
-| `JWT_SECRET` | Sí | Secreto HMAC de al menos 32 bytes. |
-| `JWT_ISSUER` | No | Emisor del token. |
-| `JWT_AUDIENCE` | No | Audiencia del token. |
-| `JWT_EXPIRATION` | No | Duración del token, por ejemplo `PT30M`. |
-| `FRANCHISE_APP_USERNAME` | Sí | Usuario técnico de evaluación. |
-| `FRANCHISE_APP_PASSWORD` | Sí | Contraseña del usuario técnico. |
+| Variable | Obligatoria | Uso | Ejemplo local |
+| --- | --- | --- | --- |
+| `MONGODB_URI` | No | Conexión con MongoDB | `mongodb://localhost:27017/franchise_hub` |
+| `JWT_SECRET` | Sí | Secreto HMAC de al menos 32 bytes | `local-only-example-secret-for-franchise-hub-32-bytes` |
+| `JWT_ISSUER` | No | Emisor del token | `franchise-hub` |
+| `JWT_AUDIENCE` | No | Audiencia del token | `franchise-hub-api` |
+| `JWT_EXPIRATION` | No | Duración del token | `PT30M` |
+| `FRANCHISE_APP_USERNAME` | Sí | Usuario técnico de evaluación | `reviewer` |
+| `FRANCHISE_APP_PASSWORD` | Sí | Contraseña local del usuario técnico | `reviewer123` |
 
-Los archivos `.env` reales no deben versionarse. Nunca guardar secretos de
-producción, credenciales cloud o tokens en el repositorio.
+Los valores de producción no se incluyen en el repositorio. Los archivos `.env`
+reales no deben versionarse.
 
-## Integración continua
+## Tests y calidad
 
-GitHub Actions valida los cambios en Pull Requests y en las ramas configuradas.
-El workflow comprueba:
+Ejecuta los comandos desde la raíz del repositorio.
+
+### Windows PowerShell
+
+```powershell
+.\mvnw.cmd clean test
+.\mvnw.cmd checkstyle:check
+.\mvnw.cmd clean package
+```
+
+### Linux/macOS
+
+```bash
+./mvnw clean test
+./mvnw checkstyle:check
+./mvnw clean package
+```
+
+Los tests de persistencia utilizan Testcontainers con MongoDB cuando Docker
+está disponible. Si Docker no está disponible, esos tests pueden quedar
+omitidos por la configuración de integración.
+
+## Integración continua y entrega
+
+GitHub Actions valida los Pull Requests y los pushes configurados en el
+repositorio. El workflow comprueba:
 
 - Checkstyle y compilación.
 - Tests unitarios, reactivos y de persistencia.
@@ -273,43 +567,88 @@ El workflow comprueba:
 - Construcción y smoke test de Docker.
 - Formato y validación de Terraform.
 
-GitHub Actions valida el proyecto, pero no publica imágenes ni despliega la
-infraestructura.
-
-## AWS y Terraform
-
-La infraestructura está definida con Terraform y el entorno fue desplegado y
-validado mediante los siguientes componentes:
-
-- MongoDB Atlas M0
-- Amazon ECR
-- Amazon ECS/Fargate
-- AWS Secrets Manager
-- Amazon CloudWatch
-- AWS CodeBuild
-- AWS CodePipeline
-- AWS CodeConnections
+El flujo de entrega cloud es:
 
 ```text
-GitHub main
-    -> CodePipeline
-    -> CodeBuild
-    -> ECR
-    -> ECS/Fargate
-    -> MongoDB Atlas
+GitHub main -> CodePipeline -> CodeBuild -> ECR -> ECS/Fargate -> MongoDB Atlas
 ```
 
-La imagen se construye y publica en ECR; ECS ejecuta la task y la aplicación
-usa MongoDB Atlas como persistencia. La IP pública de una task Fargate puede
-cambiar cuando la task es reemplazada.
+GitHub Actions valida el proyecto; CodePipeline y CodeBuild realizan la
+construcción y entrega de la imagen hacia ECS/Fargate.
 
-La ejecución local no depende de AWS. Para cambios de infraestructura se debe
-revisar primero el plan de Terraform y seguir el flujo de Pull Requests del
-proyecto.
+## Entorno AWS de evaluación
 
-## Estado del proyecto
+La solución está desplegada en AWS para permitir una evaluación directa.
 
-La API está implementada con los casos funcionales de franquicias, sucursales,
-productos y stock, incluyendo consulta del producto con mayor stock por
-sucursal. El repositorio contiene el código, las pruebas, la configuración
-local, la infraestructura como código y el pipeline de entrega.
+API:
+
+```text
+http://54.152.239.208:8080
+```
+
+Swagger UI:
+
+```text
+http://54.152.239.208:8080/swagger-ui.html
+```
+
+Health:
+
+```text
+http://54.152.239.208:8080/actuator/health
+```
+
+Para el login del entorno AWS utiliza el usuario:
+
+```text
+reviewer
+```
+
+La contraseña del usuario de evaluación se entrega junto con el correo de
+entrega.
+
+Para probar el entorno AWS:
+
+1. Abre la URL de Swagger indicada arriba.
+2. Ejecuta `POST /api/auth/login` con el usuario `reviewer` y la contraseña
+   entregada por correo.
+3. Verifica HTTP `200`.
+4. Copia únicamente `data.accessToken`.
+5. Pulsa **Authorize** y pega el token sin comillas ni la palabra `Bearer`.
+6. Ejecuta `GET /api/franchises`.
+7. Verifica HTTP `200`.
+
+La IP pública pertenece a la task Fargate actual y puede cambiar si la task es
+reemplazada.
+
+La infraestructura utiliza Terraform, MongoDB Atlas M0, ECR, ECS/Fargate,
+Secrets Manager, CloudWatch, CodeBuild, CodePipeline y CodeConnections.
+
+## Estructura principal
+
+```text
+franchise-hub/
+├── .github/workflows/
+├── src/main/
+├── src/test/
+├── terraform/
+├── Dockerfile
+├── compose.yaml
+├── buildspec.yml
+├── pom.xml
+├── mvnw
+├── mvnw.cmd
+├── .env.example
+└── README.md
+```
+
+## Flujo Git
+
+Los cambios del proyecto siguen este flujo:
+
+```text
+feature / fix / chore / docs -> Pull Request -> dev -> Pull Request -> main
+```
+
+El README describe la ejecución local y la evaluación del estado desplegado,
+pero no contiene credenciales reales ni tokens.
