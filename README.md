@@ -465,6 +465,149 @@ La ejecución Docker usa MongoDB en el servicio `mongo` y conserva los datos en 
 
 La integración de persistencia se prueba con Testcontainers y MongoDB real. La configuración cloud definitiva no se necesita para ejecutar o evaluar localmente esta API.
 
-## Próximo/despliegue cloud
+## Despliegue AWS
 
-La fase de AWS/Terraform se trabaja por separado. Este PR no crea recursos cloud, no publica imágenes en ECR y no inventa una URL de despliegue.
+Esta sección prepara y planifica una arquitectura cloud, pero no afirma que exista infraestructura desplegada. La arquitectura objetivo es:
+
+```text
+GitHub Actions + OIDC
+        ↓
+Amazon ECR
+        ↓
+Amazon ECS / Fargate
+        ↓
+MongoDB Atlas M0 FREE
+```
+
+La aplicación continúa usando MongoDB reactivo y recibe `MONGODB_URI`. No se reemplaza persistencia por DynamoDB, RDS o DocumentDB.
+
+### Prerrequisitos
+
+- Cuenta AWS y perfil `franchise-hub`.
+- Región AWS, por defecto `us-east-1`.
+- Terraform `>= 1.11.0`.
+- Docker para construir la imagen cuando se autorice el despliegue.
+- MongoDB Atlas Organization ID.
+- Variables de provider Atlas fuera del repositorio: `MONGODB_ATLAS_CLIENT_ID` y `MONGODB_ATLAS_CLIENT_SECRET`.
+- `TF_VAR_atlas_org_id` y `TF_VAR_atlas_db_password` proporcionados sólo en memoria.
+
+El provider Atlas usa automáticamente `MONGODB_ATLAS_CLIENT_ID` y `MONGODB_ATLAS_CLIENT_SECRET`. No crear variables Terraform para esas credenciales ni guardarlas en archivos.
+
+### Terraform y MongoDB Atlas
+
+Terraform declara en `terraform/atlas.tf`:
+
+- Proyecto Atlas `franchise-hub` en la organización configurada.
+- Cluster `mongodbatlas_advanced_cluster` `REPLICASET` M0.
+- M0 representado por `provider_name = "TENANT"`, `backing_provider_name = "AWS"` y región `US_EAST_1`.
+- Usuario `franchise_app` con rol `readWrite` sobre `franchise_hub`.
+- Usuario con `password_wo` y `password_wo_version`; nunca se usa `password`.
+- Access list local `190.69.39.48/32`.
+- `0.0.0.0/0` sólo si `atlas_allow_public_runtime=true`; no es una configuración de producción.
+
+Genera una contraseña temporal para el plan sin imprimirla:
+
+```powershell
+$env:TF_VAR_atlas_db_password = [Convert]::ToHexString(
+  [Security.Cryptography.RandomNumberGenerator]::GetBytes(24)
+).ToLower()
+```
+
+Confirma únicamente su existencia:
+
+```powershell
+Test-Path Env:TF_VAR_atlas_db_password
+```
+
+### AWS ECS / Fargate
+
+Terraform declara:
+
+- ECR privado `franchise-hub`, scanning al publicar y lifecycle de imágenes.
+- ECS cluster y ECS service.
+- Task Definition Fargate `awsvpc` con `256` CPU y `1024` MB.
+- Imagen `franchise-hub:latest`.
+- Default VPC y subnets públicas resueltas mediante data sources, sin hardcodear IDs.
+- Security Group TCP `8080` para evaluación pública temporal.
+- `assign_public_ip=true`, sin ALB ni NAT Gateway.
+- CloudWatch Log Group `/ecs/franchise-hub` con retención de 3 días.
+- `desired_count=0` mientras `enable_service=false`; cambia a 1 cuando se autorice el despliegue.
+
+La IP pública de una task Fargate es dinámica. No se crea una VPC nueva, ALB, NAT Gateway, EC2, EKS, RDS ni DocumentDB.
+
+### Secrets Manager
+
+Terraform crea únicamente el contenedor `franchise-hub/runtime`; no crea un `SecretVersion` ni escribe valores sensibles en state. Posteriormente, fuera de Terraform, el secreto deberá contener JSON con:
+
+```json
+{
+  "MONGODB_URI": "...",
+  "JWT_SECRET": "...",
+  "FRANCHISE_APP_USERNAME": "...",
+  "FRANCHISE_APP_PASSWORD": "..."
+}
+```
+
+La Task Definition referencia las cuatro claves del mismo secreto. Los valores no sensibles `JWT_ISSUER`, `JWT_AUDIENCE` y `JWT_EXPIRATION` son variables normales.
+
+### IAM y OIDC
+
+Se declara un ECS Task Execution Role con permisos mínimos para descargar la imagen ECR, escribir logs y leer `franchise-hub/runtime`. La aplicación no recibe un Task Role porque no llama directamente APIs AWS.
+
+El rol de GitHub Actions queda limitado a ECR push, ECS update/describe y consulta de la ENI pública. Su trust usa:
+
+```text
+repo:kevinmartinez07@121494810/franchise-hub@1398796900:environment:production
+```
+
+El workflow mantiene `environment: production`, exige `refs/heads/main` antes de autenticarse y usa `aud=sts.amazonaws.com`. No se permiten wildcards de repositorio o branch.
+
+### Validación y plan
+
+Desde la raíz:
+
+```powershell
+$env:AWS_PROFILE="franchise-hub"
+terraform -chdir=terraform fmt -recursive
+terraform -chdir=terraform fmt -check -recursive
+terraform -chdir=terraform init -backend=false -upgrade
+terraform -chdir=terraform validate
+terraform -chdir=terraform plan `
+  -var="aws_region=us-east-1" `
+  -var="atlas_client_cidr=190.69.39.48/32" `
+  -var="atlas_allow_public_runtime=false" `
+  -var="enable_service=false"
+```
+
+El plan debe mostrar Atlas Project, M0 cluster, database user, access list local, ECR, ECS cluster, task definition, service con desired count 0, Security Group, CloudWatch Log Group, un secreto Secrets Manager e IAM según permisos. No debe mostrar App Runner, ALB ni NAT Gateway.
+
+`terraform apply` modifica recursos y puede generar costos. `terraform destroy` elimina la infraestructura y también requiere autorización. Ninguno forma parte de esta fase.
+
+### Bootstrap posterior
+
+1. Validar y revisar el plan sin aplicar.
+2. Autorizar y aplicar la base con `enable_service=false`.
+3. Publicar la primera imagen en ECR mediante el workflow CD autorizado.
+4. Crear o actualizar fuera de esta fase el JSON de `franchise-hub/runtime`.
+5. Cambiar `enable_service=true` y aplicar cuando corresponda.
+6. Validar la IP pública dinámica y `/actuator/health`.
+
+No se deben ejecutar estos pasos como parte de la revisión actual.
+
+### Workflow CD manual
+
+`.github/workflows/cd.yml` sólo usa `workflow_dispatch` y `environment: production`. Antes de usarlo, configurar estas variables del environment:
+
+| Variable | Valor |
+| --- | --- |
+| `AWS_REGION` | Región AWS elegida |
+| `AWS_DEPLOY_ROLE_ARN` | Output del rol GitHub Actions |
+| `ECR_REPOSITORY` | `franchise-hub` |
+| `ECS_CLUSTER_NAME` | Output `ecs_cluster_name` |
+| `ECS_SERVICE_NAME` | Output `ecs_service_name` |
+
+El workflow comprueba `GITHUB_REF=refs/heads/main`, configura OIDC, construye y publica SHA más `latest`, actualiza ECS a desired count 1, espera `services-stable`, obtiene la task/ENI/IP pública y valida `/actuator/health`. No se ejecuta automáticamente ni se ejecuta durante este PR.
+
+### Terraform state y costos
+
+No se versionan `.terraform/`, `terraform.tfstate`, planes ni `terraform.tfvars` reales. ECR, ECS/Fargate, CloudWatch y Secrets Manager pueden generar costos; Atlas M0 es el tier gratuito sujeto a límites y políticas vigentes. Fargate con desired count 0 evita mantener una task encendida durante bootstrap, pero cualquier task activa consume recursos.

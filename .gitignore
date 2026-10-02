@@ -45,3 +45,11 @@ Desktop.ini
 .env
 .env.*
 !.env.example
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+!terraform/terraform.tfvars.example
