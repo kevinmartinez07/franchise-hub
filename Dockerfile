@@ -1,10 +1,10 @@
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM public.ecr.aws/docker/library/eclipse-temurin:21-jdk-alpine AS build
 
 WORKDIR /workspace
 COPY . .
 RUN chmod +x mvnw && ./mvnw -q -DskipTests package
 
-FROM eclipse-temurin:21-jre-alpine
+FROM public.ecr.aws/docker/library/eclipse-temurin:21-jre-alpine
 
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app

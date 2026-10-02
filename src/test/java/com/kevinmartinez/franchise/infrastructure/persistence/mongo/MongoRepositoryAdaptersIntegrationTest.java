@@ -41,7 +41,11 @@ class MongoRepositoryAdaptersIntegrationTest {
 
     @Container
     static final MongoDBContainer MONGODB = new MongoDBContainer(
-            DockerImageName.parse(System.getenv().getOrDefault("TEST_MONGO_IMAGE", "mongo:8.0")));
+            DockerImageName.parse(
+                    System.getenv().getOrDefault(
+                            "TEST_MONGO_IMAGE",
+                            "public.ecr.aws/docker/library/mongo:8.0"))
+                    .asCompatibleSubstituteFor("mongo"));
 
     @DynamicPropertySource
     static void mongoProperties(DynamicPropertyRegistry registry) {
