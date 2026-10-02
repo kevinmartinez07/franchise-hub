@@ -1,0 +1,19 @@
+aws_region = "us-east-1"
+app_name   = "franchise-hub"
+image_tag  = "latest"
+
+# Keep false until the first image exists in ECR and all four secret ARNs are ready.
+enable_service = false
+
+# Use ARNs of pre-existing Secrets Manager secrets. Do not put secret values here.
+mongodb_uri_secret_arn           = "arn:aws:secretsmanager:<region>:<account-id>:secret:<mongodb-uri-secret>"
+jwt_secret_arn                   = "arn:aws:secretsmanager:<region>:<account-id>:secret:<jwt-secret>"
+franchise_app_username_secret_arn = "arn:aws:secretsmanager:<region>:<account-id>:secret:<app-username-secret>"
+franchise_app_password_secret_arn = "arn:aws:secretsmanager:<region>:<account-id>:secret:<app-password-secret>"
+
+# Enable only after confirming whether the account already has this provider.
+create_github_oidc_provider = false
+github_actions_oidc_provider_arn = "arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com"
+enable_github_actions_role       = false
+github_repository                = "kevinmartinez07/franchise-hub"
+github_deploy_branch             = "main"
