@@ -31,6 +31,9 @@ jobs:
       - name: Prepare Maven Wrapper
         run: chmod +x mvnw
 
+      - name: Quality check
+        run: ./mvnw checkstyle:check
+
       - name: Compile
         run: ./mvnw -DskipTests compile
 
@@ -69,5 +72,71 @@ jobs:
       - name: Package application
         run: ./mvnw package -DskipTests
 
+      - name: Verify packaged JAR
+        run: test -n "$(find target -maxdepth 1 -type f -name 'franchise-hub-*.jar' -print -quit)"
+
       - name: Build Docker image
         run: docker build --tag franchise-hub:ci .
+
+      - name: Mask Docker smoke test configuration
+        run: |
+          jwt_secret="ci-smoke-$(printf '%s' 'franchise-hub-secret-with-more-than-32-bytes')"
+          username="smoke-$(printf '%s' 'reviewer')"
+          password="smoke-$(printf '%s' 'test-password')"
+          echo "::add-mask::$jwt_secret"
+          echo "::add-mask::$username"
+          echo "::add-mask::$password"
+
+      - name: Run Docker smoke test
+        env:
+          JWT_SECRET: ci-smoke-franchise-hub-secret-with-more-than-32-bytes
+          JWT_ISSUER: franchise-hub
+          JWT_AUDIENCE: franchise-hub-api
+          JWT_EXPIRATION: PT30M
+          FRANCHISE_APP_USERNAME: smoke-reviewer
+          FRANCHISE_APP_PASSWORD: smoke-test-password
+        run: |
+          set -euo pipefail
+          network="franchise-hub-ci"
+          mongo="franchise-hub-ci-mongo"
+          api="franchise-hub-ci-api"
+          docker network create "$network"
+          docker run -d --name "$mongo" --network "$network" mongo:8.0
+          docker run -d --name "$api" --network "$network" -p 8080:8080 \
+            -e MONGODB_URI="mongodb://$mongo:27017/franchise_hub" \
+            -e JWT_SECRET="$JWT_SECRET" \
+            -e JWT_ISSUER="$JWT_ISSUER" \
+            -e JWT_AUDIENCE="$JWT_AUDIENCE" \
+            -e JWT_EXPIRATION="$JWT_EXPIRATION" \
+            -e FRANCHISE_APP_USERNAME="$FRANCHISE_APP_USERNAME" \
+            -e FRANCHISE_APP_PASSWORD="$FRANCHISE_APP_PASSWORD" \
+            franchise-hub:ci
+
+          for attempt in $(seq 1 60); do
+            if health="$(curl --silent --fail http://localhost:8080/actuator/health)" && \
+              echo "$health" | jq --exit-status '.status == "UP"' >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              echo "Docker smoke health check did not become UP"
+              docker logs "$api"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          curl --silent --fail --output login-response.json \
+            --header 'Content-Type: application/json' \
+            --data '{"username":"smoke-reviewer","password":"smoke-test-password"}' \
+            http://localhost:8080/api/auth/login
+          token="$(jq --raw-output '.data.accessToken' login-response.json)"
+          test -n "$token" && test "$token" != "null"
+          curl --silent --fail --header "Authorization: Bearer $token" \
+            http://localhost:8080/api/franchises >/dev/null
+          rm -f login-response.json
+
+      - name: Cleanup Docker smoke test
+        if: always()
+        run: |
+          docker rm -f franchise-hub-ci-api franchise-hub-ci-mongo 2>/dev/null || true
+          docker network rm franchise-hub-ci 2>/dev/null || true
