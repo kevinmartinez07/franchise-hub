@@ -1,0 +1,93 @@
+name: CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Optional image tag; defaults to the selected commit SHA"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      APP_RUNNER_SERVICE_ARN: ${{ vars.APP_RUNNER_SERVICE_ARN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: franchise-hub-cd-${{ github.run_id }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve image tag and repository URI
+        run: |
+          set -euo pipefail
+          image_tag="${{ inputs.image_tag }}"
+          if [ -z "$image_tag" ]; then
+            image_tag="$GITHUB_SHA"
+          fi
+          repository_uri="$(aws ecr describe-repositories \
+            --repository-names "$ECR_REPOSITORY" \
+            --query 'repositories[0].repositoryUri' \
+            --output text)"
+          echo "IMAGE_TAG=$image_tag" >> "$GITHUB_ENV"
+          echo "ECR_REPOSITORY_URI=$repository_uri" >> "$GITHUB_ENV"
+
+      - name: Build and push image
+        run: |
+          set -euo pipefail
+          docker build \
+            --tag "$ECR_REPOSITORY_URI:$IMAGE_TAG" \
+            --tag "$ECR_REPOSITORY_URI:latest" \
+            .
+          docker push "$ECR_REPOSITORY_URI:$IMAGE_TAG"
+          docker push "$ECR_REPOSITORY_URI:latest"
+
+      - name: Start App Runner deployment
+        run: aws apprunner start-deployment --service-arn "$APP_RUNNER_SERVICE_ARN"
+
+      - name: Wait for App Runner health
+        run: |
+          set -euo pipefail
+          service_url="$(aws apprunner describe-service \
+            --service-arn "$APP_RUNNER_SERVICE_ARN" \
+            --query 'Service.ServiceUrl' \
+            --output text)"
+          for attempt in $(seq 1 60); do
+            status="$(aws apprunner describe-service \
+              --service-arn "$APP_RUNNER_SERVICE_ARN" \
+              --query 'Service.Status' \
+              --output text)"
+            if [ "$status" = "RUNNING" ]; then
+              health="$(curl --silent --fail "https://$service_url/actuator/health")"
+              if echo "$health" | jq --exit-status '.status == "UP"' >/dev/null; then
+                exit 0
+              fi
+            fi
+            if [ "$status" = "CREATE_FAILED" ] || [ "$status" = "UPDATE_FAILED" ]; then
+              echo "App Runner deployment failed with status: $status"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "App Runner did not become healthy within the timeout"
+          exit 1
