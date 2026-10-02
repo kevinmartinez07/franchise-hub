@@ -3,14 +3,29 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.app.repository_url
 }
 
-output "apprunner_service_url" {
-  description = "App Runner service URL when the service is enabled."
-  value       = try(aws_apprunner_service.app[0].service_url, null)
+output "ecs_cluster_name" {
+  description = "ECS cluster name."
+  value       = aws_ecs_cluster.app.name
 }
 
-output "apprunner_service_arn" {
-  description = "App Runner service ARN when the service is enabled."
-  value       = try(aws_apprunner_service.app[0].arn, null)
+output "ecs_service_name" {
+  description = "ECS service name."
+  value       = aws_ecs_service.app.name
+}
+
+output "runtime_secret_arn" {
+  description = "Secrets Manager ARN for the single runtime JSON secret."
+  value       = aws_secretsmanager_secret.runtime.arn
+}
+
+output "atlas_project_id" {
+  description = "MongoDB Atlas project ID."
+  value       = mongodbatlas_project.app.id
+}
+
+output "atlas_cluster_name" {
+  description = "MongoDB Atlas M0 cluster name."
+  value       = mongodbatlas_advanced_cluster.app.name
 }
 
 output "github_actions_deploy_role_arn" {

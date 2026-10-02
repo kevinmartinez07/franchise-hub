@@ -1,92 +1,71 @@
 variable "aws_region" {
-  description = "AWS region for ECR, IAM and App Runner."
+  description = "AWS region for ECR, ECS and supporting resources."
   type        = string
   default     = "us-east-1"
 }
 
 variable "app_name" {
-  description = "Base name for AWS resources."
+  description = "Base name for AWS and Atlas resources."
   type        = string
   default     = "franchise-hub"
 }
 
 variable "image_tag" {
-  description = "Image tag that already exists in ECR when App Runner is enabled."
+  description = "Container image tag available in ECR for the ECS task definition."
   type        = string
   default     = "latest"
 }
 
 variable "enable_service" {
-  description = "Create the App Runner service. Keep false until ECR contains the first image."
+  description = "Keep the ECS service at desired_count 0 until deployment is authorized."
   type        = bool
   default     = false
 }
 
-variable "mongodb_uri_secret_arn" {
-  description = "Existing Secrets Manager ARN containing MONGODB_URI."
+variable "atlas_org_id" {
+  description = "MongoDB Atlas organization ID."
+  type        = string
+}
+
+variable "atlas_db_password" {
+  description = "Temporary write-only password for the Atlas database user."
   type        = string
   sensitive   = true
-  default     = null
-  nullable    = true
 }
 
-variable "jwt_secret_arn" {
-  description = "Existing Secrets Manager ARN containing JWT_SECRET."
-  type        = string
-  sensitive   = true
-  default     = null
-  nullable    = true
+variable "atlas_db_password_version" {
+  description = "Version used to rotate the write-only Atlas database user password."
+  type        = number
+  default     = 1
 }
 
-variable "franchise_app_username_secret_arn" {
-  description = "Existing Secrets Manager ARN containing FRANCHISE_APP_USERNAME."
+variable "atlas_client_cidr" {
+  description = "Local CIDR allowed to reach the Atlas project."
   type        = string
-  sensitive   = true
-  default     = null
-  nullable    = true
+  default     = "190.69.39.48/32"
 }
 
-variable "franchise_app_password_secret_arn" {
-  description = "Existing Secrets Manager ARN containing FRANCHISE_APP_PASSWORD."
-  type        = string
-  sensitive   = true
-  default     = null
-  nullable    = true
-}
-
-variable "jwt_issuer" {
-  description = "JWT issuer passed as a non-sensitive App Runner environment variable."
-  type        = string
-  default     = "franchise-hub"
-}
-
-variable "jwt_audience" {
-  description = "JWT audience passed as a non-sensitive App Runner environment variable."
-  type        = string
-  default     = "franchise-hub-api"
-}
-
-variable "jwt_expiration" {
-  description = "ISO-8601 JWT duration passed as a non-sensitive App Runner environment variable."
-  type        = string
-  default     = "PT30M"
+variable "atlas_allow_public_runtime" {
+  description = "Temporarily allow all IPv4 sources for public Fargate evaluation. Not production-safe."
+  type        = bool
+  default     = false
 }
 
 variable "create_github_oidc_provider" {
-  description = "Create the GitHub Actions OIDC provider. Enable only when the AWS account does not already have it."
+  description = "Create the GitHub Actions OIDC provider if the AWS account does not already have it."
   type        = bool
   default     = false
 }
 
 variable "github_actions_oidc_provider_arn" {
-  description = "Existing GitHub Actions OIDC provider ARN, if it is managed outside this stack."
+  description = "Existing GitHub Actions OIDC provider ARN, when managed outside this stack."
   type        = string
   default     = null
   nullable    = true
 }
 
 variable "enable_github_actions_role" {
-  description = "Create the deploy role trusted by the configured GitHub repository and branch."
+  description = "Create the deploy role trusted by the production GitHub environment subject."
   type        = bool
   default     = false
 }
@@ -97,8 +76,8 @@ variable "github_repository" {
   default     = "kevinmartinez07/franchise-hub"
 }
 
-variable "github_deploy_branch" {
-  description = "Git branch allowed to assume the deploy role."
+variable "github_oidc_subject" {
+  description = "Immutable GitHub OIDC subject for the production environment."
   type        = string
-  default     = "main"
+  default     = "repo:kevinmartinez07@121494810/franchise-hub@1398796900:environment:production"
 }

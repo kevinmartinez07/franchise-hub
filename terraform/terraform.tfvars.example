@@ -2,18 +2,18 @@ aws_region = "us-east-1"
 app_name   = "franchise-hub"
 image_tag  = "latest"
 
-# Keep false until the first image exists in ECR and all four secret ARNs are ready.
+# Keep the ECS service at desired_count = 0 during bootstrap.
 enable_service = false
 
-# Use ARNs of pre-existing Secrets Manager secrets. Do not put secret values here.
-mongodb_uri_secret_arn           = "arn:aws:secretsmanager:<region>:<account-id>:secret:<mongodb-uri-secret>"
-jwt_secret_arn                   = "arn:aws:secretsmanager:<region>:<account-id>:secret:<jwt-secret>"
-franchise_app_username_secret_arn = "arn:aws:secretsmanager:<region>:<account-id>:secret:<app-username-secret>"
-franchise_app_password_secret_arn = "arn:aws:secretsmanager:<region>:<account-id>:secret:<app-password-secret>"
+# TF_VAR_atlas_org_id and TF_VAR_atlas_db_password are provided outside this file.
+atlas_org_id = "6abfe4803b197494864aab47"
 
-# Enable only after confirming whether the account already has this provider.
-create_github_oidc_provider = false
-github_actions_oidc_provider_arn = "arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com"
-enable_github_actions_role       = false
-github_repository                = "kevinmartinez07/franchise-hub"
-github_deploy_branch             = "main"
+# Use the current public IP only for local evaluation. Do not enable public runtime by default.
+atlas_client_cidr          = "190.69.39.48/32"
+atlas_allow_public_runtime = false
+
+# Enable only after the AWS OIDC provider and GitHub environment are confirmed.
+create_github_oidc_provider   = false
+enable_github_actions_role    = false
+github_repository             = "kevinmartinez07/franchise-hub"
+github_oidc_subject           = "repo:kevinmartinez07@121494810/franchise-hub@1398796900:environment:production"
