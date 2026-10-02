@@ -2,6 +2,10 @@ package com.kevinmartinez.franchise;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import com.kevinmartinez.franchise.infrastructure.persistence.mongo.repository.ReactiveBranchMongoRepository;
+import com.kevinmartinez.franchise.infrastructure.persistence.mongo.repository.ReactiveFranchiseMongoRepository;
+import com.kevinmartinez.franchise.infrastructure.persistence.mongo.repository.ReactiveProductMongoRepository;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -12,6 +16,15 @@ import org.springframework.boot.test.context.SpringBootTest;
                 + "org.springframework.boot.autoconfigure.data.mongo.MongoReactiveRepositoriesAutoConfiguration"
 })
 class FranchiseHubApplicationTests {
+
+    @MockitoBean
+    private ReactiveBranchMongoRepository branchMongoRepository;
+
+    @MockitoBean
+    private ReactiveFranchiseMongoRepository franchiseMongoRepository;
+
+    @MockitoBean
+    private ReactiveProductMongoRepository productMongoRepository;
 
     @Test
     void contextLoads() {
