@@ -3,13 +3,11 @@ variable "aws_region" {
   type        = string
   default     = "us-east-1"
 }
-
 variable "app_name" {
   description = "Base name for AWS and Atlas resources."
   type        = string
   default     = "franchise-hub"
 }
-
 variable "image_tag" {
   description = "Container image tag available in ECR for the ECS task definition."
   type        = string
@@ -21,7 +19,6 @@ variable "enable_service" {
   type        = bool
   default     = false
 }
-
 variable "atlas_org_id" {
   description = "MongoDB Atlas organization ID."
   type        = string
@@ -51,33 +48,6 @@ variable "atlas_allow_public_runtime" {
   default     = false
 }
 
-variable "create_github_oidc_provider" {
-  description = "Create the GitHub Actions OIDC provider if the AWS account does not already have it."
-  type        = bool
-  default     = false
-}
+# Deployment integration is managed by CodePipeline rather than GitHub OIDC.
+#
 
-variable "github_actions_oidc_provider_arn" {
-  description = "Existing GitHub Actions OIDC provider ARN, when managed outside this stack."
-  type        = string
-  default     = null
-  nullable    = true
-}
-
-variable "enable_github_actions_role" {
-  description = "Create the deploy role trusted by the production GitHub environment subject."
-  type        = bool
-  default     = false
-}
-
-variable "github_repository" {
-  description = "GitHub repository allowed to assume the deploy role."
-  type        = string
-  default     = "kevinmartinez07/franchise-hub"
-}
-
-variable "github_oidc_subject" {
-  description = "Immutable GitHub OIDC subject for the production environment."
-  type        = string
-  default     = "repo:kevinmartinez07@121494810/franchise-hub@1398796900:environment:production"
-}

@@ -1,7 +1,7 @@
 locals {
-  ecr_repository_arn = aws_ecr_repository.app.arn
-  ecs_cluster_arn    = aws_ecs_cluster.app.arn
-  ecs_service_arn    = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/${aws_ecs_cluster.app.name}/${var.app_name}"
+  ecr_repository_arn    = aws_ecr_repository.app.arn
+  ecs_service_arn       = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/${aws_ecs_cluster.app.name}/${var.app_name}"
+  codebuild_project_arn = "arn:aws:codebuild:${var.aws_region}:${data.aws_caller_identity.current.account_id}:project/${var.app_name}-build"
 }
 
 data "aws_iam_policy_document" "ecs_task_assume" {
@@ -55,57 +55,35 @@ resource "aws_iam_role_policy" "ecs_task_execution" {
   policy = data.aws_iam_policy_document.ecs_task_execution.json
 }
 
-resource "aws_iam_openid_connect_provider" "github" {
-  count = var.create_github_oidc_provider ? 1 : 0
-
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
-}
-
-data "aws_iam_policy_document" "github_actions_assume" {
-  count = var.enable_github_actions_role ? 1 : 0
-
+data "aws_iam_policy_document" "codebuild_assume" {
   statement {
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+    actions = ["sts:AssumeRole"]
 
     principals {
-      type = "Federated"
-      identifiers = [coalesce(
-        var.github_actions_oidc_provider_arn,
-        try(aws_iam_openid_connect_provider.github[0].arn, "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com")
-      )]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:sub"
-      values   = [var.github_oidc_subject]
+      type        = "Service"
+      identifiers = ["codebuild.amazonaws.com"]
     }
   }
 }
 
-resource "aws_iam_role" "github_actions_deploy" {
-  count              = var.enable_github_actions_role ? 1 : 0
-  name               = "${var.app_name}-github-actions-deploy"
-  assume_role_policy = data.aws_iam_policy_document.github_actions_assume[0].json
-
-  lifecycle {
-    precondition {
-      condition     = var.github_actions_oidc_provider_arn != null || var.create_github_oidc_provider
-      error_message = "Configure an existing GitHub OIDC provider ARN or enable its creation before enabling the deploy role."
-    }
-  }
+resource "aws_iam_role" "codebuild" {
+  name               = "${var.app_name}-codebuild"
+  assume_role_policy = data.aws_iam_policy_document.codebuild_assume.json
 }
 
-data "aws_iam_policy_document" "github_actions_deploy" {
-  count = var.enable_github_actions_role ? 1 : 0
+data "aws_iam_policy_document" "codebuild" {
+  statement {
+    actions   = ["logs:CreateLogGroup"]
+    resources = ["*"]
+  }
+
+  statement {
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/codebuild/${var.app_name}-build:*"]
+  }
 
   statement {
     actions   = ["ecr:GetAuthorizationToken"]
@@ -125,23 +103,117 @@ data "aws_iam_policy_document" "github_actions_deploy" {
 
   statement {
     actions = [
-      "ecs:DescribeServices",
-      "ecs:DescribeTasks",
-      "ecs:ListTasks",
-      "ecs:UpdateService"
+      "s3:GetBucketAcl",
+      "s3:GetBucketLocation",
+      "s3:ListBucket"
     ]
-    resources = [local.ecs_cluster_arn, local.ecs_service_arn]
+    resources = [aws_s3_bucket.pipeline_artifacts.arn]
   }
 
   statement {
-    actions   = ["ec2:DescribeNetworkInterfaces"]
-    resources = ["*"]
+    actions = [
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:PutObject"
+    ]
+    resources = ["${aws_s3_bucket.pipeline_artifacts.arn}/*"]
   }
 }
 
-resource "aws_iam_role_policy" "github_actions_deploy" {
-  count  = var.enable_github_actions_role ? 1 : 0
-  name   = "${var.app_name}-github-actions-deploy"
-  role   = aws_iam_role.github_actions_deploy[0].id
-  policy = data.aws_iam_policy_document.github_actions_deploy[0].json
+resource "aws_iam_role_policy" "codebuild" {
+  name   = "${var.app_name}-codebuild"
+  role   = aws_iam_role.codebuild.id
+  policy = data.aws_iam_policy_document.codebuild.json
+}
+
+data "aws_iam_policy_document" "codepipeline_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["codepipeline.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "codepipeline" {
+  name               = "${var.app_name}-codepipeline"
+  assume_role_policy = data.aws_iam_policy_document.codepipeline_assume.json
+}
+
+data "aws_iam_policy_document" "codepipeline" {
+  statement {
+    actions = [
+      "s3:GetBucketVersioning",
+      "s3:ListBucket"
+    ]
+    resources = [aws_s3_bucket.pipeline_artifacts.arn]
+  }
+
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:PutObject"
+    ]
+    resources = ["${aws_s3_bucket.pipeline_artifacts.arn}/*"]
+  }
+
+  statement {
+    actions   = ["codeconnections:UseConnection"]
+    resources = [aws_codestarconnections_connection.github.arn]
+  }
+
+  statement {
+    actions = [
+      "codebuild:BatchGetBuilds",
+      "codebuild:StartBuild"
+    ]
+    resources = [local.codebuild_project_arn]
+  }
+
+  statement {
+    actions = [
+      "ecs:DescribeServices",
+      "ecs:UpdateService"
+    ]
+    resources = [local.ecs_service_arn]
+  }
+
+  statement {
+    actions = [
+      "ecs:DescribeTaskDefinition",
+      "ecs:RegisterTaskDefinition"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    actions   = ["ecs:TagResource"]
+    resources = ["arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${var.app_name}:*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ecs:CreateAction"
+      values   = ["RegisterTaskDefinition"]
+    }
+  }
+
+  statement {
+    actions   = ["iam:PassRole"]
+    resources = [aws_iam_role.ecs_task_execution.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ecs.amazonaws.com", "ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "codepipeline" {
+  name   = "${var.app_name}-codepipeline"
+  role   = aws_iam_role.codepipeline.id
+  policy = data.aws_iam_policy_document.codepipeline.json
 }

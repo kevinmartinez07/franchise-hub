@@ -108,5 +108,9 @@ resource "aws_ecs_service" "app" {
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
 
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
   depends_on = [aws_iam_role_policy.ecs_task_execution]
 }

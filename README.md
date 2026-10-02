@@ -470,7 +470,17 @@ La integración de persistencia se prueba con Testcontainers y MongoDB real. La 
 Esta sección prepara y planifica una arquitectura cloud, pero no afirma que exista infraestructura desplegada. La arquitectura objetivo es:
 
 ```text
-GitHub Actions + OIDC
+GitHub Pull Request
+        ↓
+GitHub Actions CI
+
+main
+        ↓
+AWS CodeConnections
+        ↓
+AWS CodePipeline V1
+        ↓
+AWS CodeBuild
         ↓
 Amazon ECR
         ↓
@@ -486,7 +496,7 @@ La aplicación continúa usando MongoDB reactivo y recibe `MONGODB_URI`. No se r
 - Cuenta AWS y perfil `franchise-hub`.
 - Región AWS, por defecto `us-east-1`.
 - Terraform `>= 1.11.0`.
-- Docker para construir la imagen cuando se autorice el despliegue.
+- Docker para ejecución local; CodeBuild construye la imagen cloud.
 - MongoDB Atlas Organization ID.
 - Variables de provider Atlas fuera del repositorio: `MONGODB_ATLAS_CLIENT_ID` y `MONGODB_ATLAS_CLIENT_SECRET`.
 - `TF_VAR_atlas_org_id` y `TF_VAR_atlas_db_password` proporcionados sólo en memoria.
@@ -550,17 +560,17 @@ Terraform crea únicamente el contenedor `franchise-hub/runtime`; no crea un `Se
 
 La Task Definition referencia las cuatro claves del mismo secreto. Los valores no sensibles `JWT_ISSUER`, `JWT_AUDIENCE` y `JWT_EXPIRATION` son variables normales.
 
-### IAM y OIDC
+### IAM del pipeline
 
 Se declara un ECS Task Execution Role con permisos mínimos para descargar la imagen ECR, escribir logs y leer `franchise-hub/runtime`. La aplicación no recibe un Task Role porque no llama directamente APIs AWS.
 
-El rol de GitHub Actions queda limitado a ECR push, ECS update/describe y consulta de la ENI pública. Su trust usa:
+También se declaran roles separados para CodeBuild y CodePipeline con permisos mínimos para:
 
-```text
-repo:kevinmartinez07@121494810/franchise-hub@1398796900:environment:production
-```
+- CodeBuild: logs, artifacts S3 y publicación de imágenes en ECR.
+- CodePipeline: CodeConnections, artifacts S3, ejecución de CodeBuild y despliegue ECS estándar.
+- `iam:PassRole`: únicamente el ECS Task Execution Role, limitado a `ecs-tasks.amazonaws.com`.
 
-El workflow mantiene `environment: production`, exige `refs/heads/main` antes de autenticarse y usa `aud=sts.amazonaws.com`. No se permiten wildcards de repositorio o branch.
+No se usa GitHub OIDC para CD. No se usa CloudFormation.
 
 ### Validación y plan
 
@@ -583,31 +593,50 @@ El plan debe mostrar Atlas Project, M0 cluster, database user, access list local
 
 `terraform apply` modifica recursos y puede generar costos. `terraform destroy` elimina la infraestructura y también requiere autorización. Ninguno forma parte de esta fase.
 
+### AWS CodeConnections
+
+Terraform crea `franchise-hub-github` inicialmente en estado `PENDING`. Después de un `terraform apply`, completar una sola vez la autorización manual:
+
+1. Abrir AWS Console.
+2. Ir a Developer Tools / Connections.
+3. Seleccionar `franchise-hub-github`.
+4. Elegir `Update pending connection`.
+5. Autorizar GitHub y seleccionar `kevinmartinez07/franchise-hub`.
+
+No se guardan PATs ni tokens GitHub en Terraform, GitHub Actions o el repositorio.
+
+### AWS CodePipeline y CodeBuild
+
+`franchise-hub` es un pipeline AWS CodePipeline V1 con tres stages:
+
+- **Source**: CodeStarSourceConnection para `kevinmartinez07/franchise-hub`, rama `main`, `DetectChanges=true`.
+- **Build**: CodeBuild `franchise-hub-build`, imagen `aws/codebuild/standard:7.0`, runtime Corretto 21, `BUILD_GENERAL1_SMALL` y Docker privileged mode.
+- **Deploy**: ECS Standard Deploy para cluster y service `franchise-hub`, usando `imagedefinitions.json`.
+
+CodePipeline sólo escucha cambios reales en `main`. No se configuran triggers para `dev`, ramas feature ni Pull Requests.
+
+CodePipeline actualiza las revisiones de ECS Task Definition; Terraform ignora únicamente el drift de `task_definition`, mientras `desired_count` continúa administrado por Terraform. El bucket S3 de artifacts y el repositorio ECR permiten limpieza con `terraform destroy` al finalizar la evaluación.
+
+El `buildspec.yml` ejecuta Checkstyle, tests, package, Docker build y publica en ECR los tags del commit y `latest`. El artifact mínimo es `imagedefinitions.json`, cuyo container name coincide exactamente con `franchise-hub`.
+
 ### Bootstrap posterior
 
 1. Validar y revisar el plan sin aplicar.
 2. Autorizar y aplicar la base con `enable_service=false`.
-3. Publicar la primera imagen en ECR mediante el workflow CD autorizado.
+3. Completar manualmente la conexión GitHub pendiente.
 4. Crear o actualizar fuera de esta fase el JSON de `franchise-hub/runtime`.
-5. Cambiar `enable_service=true` y aplicar cuando corresponda.
-6. Validar la IP pública dinámica y `/actuator/health`.
+5. Habilitar el ECS service con `enable_service=true` y aplicar cuando corresponda.
+6. Confirmar que el service tiene una task lista antes de permitir el primer deploy.
+7. Hacer merge a `main`; CodePipeline detectará el cambio y ejecutará CodeBuild y ECS Standard Deploy.
 
 No se deben ejecutar estos pasos como parte de la revisión actual.
 
-### Workflow CD manual
+### GitHub Actions CI
 
-`.github/workflows/cd.yml` sólo usa `workflow_dispatch` y `environment: production`. Antes de usarlo, configurar estas variables del environment:
+`.github/workflows/ci.yml` es únicamente CI y se ejecuta en Pull Requests y pushes a `dev` o `main`. Valida Checkstyle, compile, tests con Testcontainers, package, Docker build/smoke y Terraform fmt/init/validate.
 
-| Variable | Valor |
-| --- | --- |
-| `AWS_REGION` | Región AWS elegida |
-| `AWS_DEPLOY_ROLE_ARN` | Output del rol GitHub Actions |
-| `ECR_REPOSITORY` | `franchise-hub` |
-| `ECS_CLUSTER_NAME` | Output `ecs_cluster_name` |
-| `ECS_SERVICE_NAME` | Output `ecs_service_name` |
-
-El workflow comprueba `GITHUB_REF=refs/heads/main`, configura OIDC, construye y publica SHA más `latest`, actualiza ECS a desired count 1, espera `services-stable`, obtiene la task/ENI/IP pública y valida `/actuator/health`. No se ejecuta automáticamente ni se ejecuta durante este PR.
+GitHub Actions no ejecuta deployments, no publica imágenes y no se ejecuta CodePipeline o CodeBuild durante la revisión.
 
 ### Terraform state y costos
 
-No se versionan `.terraform/`, `terraform.tfstate`, planes ni `terraform.tfvars` reales. ECR, ECS/Fargate, CloudWatch y Secrets Manager pueden generar costos; Atlas M0 es el tier gratuito sujeto a límites y políticas vigentes. Fargate con desired count 0 evita mantener una task encendida durante bootstrap, pero cualquier task activa consume recursos.
+No se versionan `.terraform/`, `terraform.tfstate`, planes ni `terraform.tfvars` reales. CodePipeline V1 se configura para aprovechar el free tier aplicable; CodeBuild `BUILD_GENERAL1_SMALL` cobra según minutos y free tier disponible. S3 conserva artifacts mínimos durante 7 días. ECR, ECS/Fargate, CloudWatch y Secrets Manager pueden generar costos; Atlas M0 es el tier gratuito sujeto a límites y políticas vigentes. Fargate con desired count 0 evita mantener una task encendida durante bootstrap, pero cualquier task activa consume recursos.

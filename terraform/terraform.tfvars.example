@@ -11,9 +11,3 @@ atlas_org_id = "6abfe4803b197494864aab47"
 # Use the current public IP only for local evaluation. Do not enable public runtime by default.
 atlas_client_cidr          = "190.69.39.48/32"
 atlas_allow_public_runtime = false
-
-# Enable only after the AWS OIDC provider and GitHub environment are confirmed.
-create_github_oidc_provider   = false
-enable_github_actions_role    = false
-github_repository             = "kevinmartinez07/franchise-hub"
-github_oidc_subject           = "repo:kevinmartinez07@121494810/franchise-hub@1398796900:environment:production"

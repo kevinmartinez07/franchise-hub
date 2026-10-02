@@ -9,6 +9,7 @@ import com.kevinmartinez.franchise.application.usecase.franchise.commands.handle
 import com.kevinmartinez.franchise.application.usecase.franchise.commands.handler.RenameFranchiseHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.dto.FranchiseDto;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.GetFranchisesQuery;
+import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchiseByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchisesHandler;
 import com.kevinmartinez.franchise.infrastructure.security.JwtTokenService;
 import com.kevinmartinez.franchise.infrastructure.security.SecurityConfig;
@@ -44,6 +45,9 @@ class SecurityWebTest {
 
     @MockitoBean
     private GetFranchisesHandler getFranchisesHandler;
+
+    @MockitoBean
+    private GetFranchiseByIdHandler getFranchiseByIdHandler;
 
     @Test
     void protectedEndpointWithoutBearerReturns401() {

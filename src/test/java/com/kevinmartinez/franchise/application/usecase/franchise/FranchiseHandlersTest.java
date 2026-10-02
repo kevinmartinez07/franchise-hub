@@ -19,6 +19,7 @@ import com.kevinmartinez.franchise.application.usecase.franchise.commands.handle
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.GetFranchiseByIdQuery;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.GetFranchisesQuery;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.GetMaxStockProductsByFranchiseQuery;
+import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchiseByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchisesHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetMaxStockProductsByFranchiseHandler;
 import com.kevinmartinez.franchise.domain.model.Branch;
@@ -86,7 +87,7 @@ class FranchiseHandlersTest {
     void getFranchiseByIdReturnsExistingFranchise() {
         InMemoryFranchiseRepository franchises = new InMemoryFranchiseRepository();
         franchises.data.put("fr-1", Franchise.create("fr-1", "Acme", NOW));
-        StepVerifier.create(new GetFranchisesHandler(franchises)
+        StepVerifier.create(new GetFranchiseByIdHandler(franchises)
                         .handle(new GetFranchiseByIdQuery("fr-1")))
                 .assertNext(franchise -> assertEquals("Acme", franchise.name()))
                 .verifyComplete();
@@ -94,7 +95,7 @@ class FranchiseHandlersTest {
 
     @Test
     void getFranchiseByMissingIdReturnsNotFound() {
-        StepVerifier.create(new GetFranchisesHandler(new InMemoryFranchiseRepository())
+        StepVerifier.create(new GetFranchiseByIdHandler(new InMemoryFranchiseRepository())
                         .handle(new GetFranchiseByIdQuery("missing")))
                 .expectError(ResourceNotFoundException.class).verify();
     }

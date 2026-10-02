@@ -16,6 +16,7 @@ import com.kevinmartinez.franchise.application.usecase.product.commands.handler.
 import com.kevinmartinez.franchise.application.usecase.product.dto.ProductDto;
 import com.kevinmartinez.franchise.application.usecase.product.queries.GetProductByIdQuery;
 import com.kevinmartinez.franchise.application.usecase.product.queries.GetProductsQuery;
+import com.kevinmartinez.franchise.application.usecase.product.queries.handler.GetProductByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.product.queries.handler.GetProductsHandler;
 import com.kevinmartinez.franchise.presentation.dto.request.AddProductRequest;
 import com.kevinmartinez.franchise.presentation.dto.request.UpdateNameRequest;
@@ -47,6 +48,7 @@ public class ProductController {
     private final UpdateProductStockHandler updateProductStockHandler;
     private final RenameProductHandler renameProductHandler;
     private final GetProductsHandler getProductsHandler;
+    private final GetProductByIdHandler getProductByIdHandler;
     private final GetMaxStockProductsByFranchiseHandler maxStockHandler;
 
     public ProductController(
@@ -55,12 +57,14 @@ public class ProductController {
             UpdateProductStockHandler updateProductStockHandler,
             RenameProductHandler renameProductHandler,
             GetProductsHandler getProductsHandler,
+            GetProductByIdHandler getProductByIdHandler,
             GetMaxStockProductsByFranchiseHandler maxStockHandler) {
         this.addProductHandler = addProductHandler;
         this.deleteProductHandler = deleteProductHandler;
         this.updateProductStockHandler = updateProductStockHandler;
         this.renameProductHandler = renameProductHandler;
         this.getProductsHandler = getProductsHandler;
+        this.getProductByIdHandler = getProductByIdHandler;
         this.maxStockHandler = maxStockHandler;
     }
 
@@ -93,7 +97,7 @@ public class ProductController {
     @GetMapping("/{productId}")
     @Operation(summary = "Get product by id")
     public Mono<ApiResponse<ProductDto>> getById(@PathVariable String productId) {
-        return getProductsHandler.handle(new GetProductByIdQuery(productId))
+        return getProductByIdHandler.handle(new GetProductByIdQuery(productId))
                 .map(response -> ApiResponse.success("Producto consultado correctamente", response));
     }
 

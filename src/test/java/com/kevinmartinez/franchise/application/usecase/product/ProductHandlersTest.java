@@ -20,6 +20,7 @@ import com.kevinmartinez.franchise.application.usecase.product.commands.handler.
 import com.kevinmartinez.franchise.application.usecase.product.commands.handler.UpdateProductStockHandler;
 import com.kevinmartinez.franchise.application.usecase.product.queries.GetProductByIdQuery;
 import com.kevinmartinez.franchise.application.usecase.product.queries.GetProductsQuery;
+import com.kevinmartinez.franchise.application.usecase.product.queries.handler.GetProductByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.product.queries.handler.GetProductsHandler;
 import com.kevinmartinez.franchise.domain.model.Branch;
 import com.kevinmartinez.franchise.domain.model.Product;
@@ -144,13 +145,13 @@ class ProductHandlersTest {
     @Test
     void getProductByIdReturnsExistingProduct() {
         ProductFake products = new ProductFake(); products.data.put("p-1", Product.create("p-1", "br-1", "Coffee", 5, NOW));
-        StepVerifier.create(new GetProductsHandler(products, new BranchFake()).handle(new GetProductByIdQuery("p-1")))
+        StepVerifier.create(new GetProductByIdHandler(products).handle(new GetProductByIdQuery("p-1")))
                 .assertNext(product -> assertEquals("Coffee", product.name())).verifyComplete();
     }
 
     @Test
     void getProductByMissingIdReturnsNotFound() {
-        StepVerifier.create(new GetProductsHandler(new ProductFake(), new BranchFake()).handle(new GetProductByIdQuery("missing")))
+        StepVerifier.create(new GetProductByIdHandler(new ProductFake()).handle(new GetProductByIdQuery("missing")))
                 .expectError(ResourceNotFoundException.class).verify();
     }
 
