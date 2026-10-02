@@ -1,124 +1,470 @@
 # Franchise Hub
 
-API reactiva para gestionar franquicias, sucursales, productos y stock. Usa Java 21, Spring Boot, WebFlux, MongoDB reactivo y JWT.
+API reactiva para administrar franquicias, sucursales, productos y stock. La aplicación usa Java 21, Spring Boot WebFlux, MongoDB reactivo, JWT y OpenAPI/Swagger.
+
+## Stack
+
+- Java 21
+- Spring Boot 3.5
+- Spring WebFlux y Project Reactor
+- Spring Data Reactive MongoDB
+- MongoDB 8.0 para ejecución local y pruebas de integración
+- Maven Wrapper
+- Docker Compose
+- JUnit 5, Reactor Test y Testcontainers
+- Checkstyle como quality gate
 
 ## Requisitos
 
+Para ejecutar la aplicación con Docker:
+
+- Git
+- Docker Engine o Docker Desktop con Docker Compose
+
+Para ejecutar sin Docker:
+
 - Java 21
-- Maven Wrapper incluido (`mvnw` / `mvnw.cmd`)
-- MongoDB local, o Docker y Docker Compose
+- Maven Wrapper incluido en el repositorio
+- MongoDB accesible en `localhost:27017`
 
-## Variables de entorno
+## Inicio rápido con Docker
 
-Las variables obligatorias son:
+Estos pasos levantan MongoDB y la API con una configuración demo local reproducible.
 
-| Variable | Descripcion |
-| --- | --- |
-| `JWT_SECRET` | Secreto HMAC de al menos 32 bytes |
-| `FRANCHISE_APP_USERNAME` | Usuario demo para el login |
-| `FRANCHISE_APP_PASSWORD` | Password demo para el login |
+### 1. Clonar el repositorio
 
-Opcionales:
-
-| Variable | Default |
-| --- | --- |
-| `MONGODB_URI` | `mongodb://localhost:27017/franchise_hub` |
-| `JWT_ISSUER` | `franchise-hub` |
-| `JWT_AUDIENCE` | `franchise-hub-api` |
-| `JWT_EXPIRATION` | `PT30M` |
-
-Para desarrollo local, copia `.env.example` como `.env` y reemplaza sus valores. `.env` no debe versionarse.
-
-## Ejecucion local
-
-Con MongoDB disponible en `localhost:27017`:
-
-```powershell
-$env:MONGODB_URI="mongodb://localhost:27017/franchise_hub"
-$env:JWT_SECRET="una-clave-local-de-al-menos-32-bytes"
-$env:FRANCHISE_APP_USERNAME="reviewer"
-$env:FRANCHISE_APP_PASSWORD="change-me"
-.\mvnw.cmd spring-boot:run
+```bash
+git clone https://github.com/kevinmartinez07/franchise-hub.git
+cd franchise-hub
 ```
 
-## Ejecucion con Docker Compose
+### 2. Crear el archivo `.env`
 
-Compose levanta la API y MongoDB, y conserva los datos en el volumen `franchise_mongo_data`:
+Windows PowerShell:
 
 ```powershell
-docker compose --env-file .env up --build
+Copy-Item .env.example .env
 ```
 
-MongoDB usa `mongo:8.0` por defecto. Para una VM sin soporte AVX, sobrescribe la imagen sólo para esa ejecución:
+Linux/macOS:
 
-```powershell
-$env:MONGO_IMAGE="mongo:4.4"
-docker compose --env-file .env up --build
+```bash
+cp .env.example .env
 ```
 
-La API queda publicada en `http://localhost:8080`. MongoDB no se publica al host.
+`.env.example` contiene credenciales demo locales y puede utilizarse tal cual para evaluar la aplicación:
 
-Para detener los servicios sin borrar datos:
+```text
+FRANCHISE_APP_USERNAME=reviewer
+FRANCHISE_APP_PASSWORD=reviewer123
+```
 
-```powershell
+El `JWT_SECRET` incluido es un secreto LOCAL ficticio de ejemplo con más de 32 bytes. Estas credenciales son únicamente para ejecución local/evaluación y no deben utilizarse en producción. No sustituirlas por credenciales personales, claves AWS, tokens reales ni `PASSWORD_VM`.
+
+### 3. Levantar servicios
+
+```bash
+docker compose up --build -d
+```
+
+El comando construye la imagen de la API, inicia MongoDB y espera a que MongoDB esté saludable antes de iniciar la API.
+
+### 4. Ver el estado
+
+```bash
+docker compose ps
+```
+
+Los servicios `mongo` y `api` deben aparecer en ejecución. MongoDB se guarda en el volumen Docker `franchise_mongo_data` y no se publica directamente al host.
+
+### 5. Validar el health check
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+La respuesta esperada contiene:
+
+```json
+{"status":"UP"}
+```
+
+### 6. Abrir Swagger
+
+Visita [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html).
+
+### 7. Detener los servicios
+
+```bash
 docker compose down
 ```
 
-## Autenticacion
-
-El login publico es `POST /api/auth/login`:
+`docker compose down` detiene y elimina los contenedores, pero no elimina el volumen de MongoDB ni sus datos. Para eliminar también los datos locales:
 
 ```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"reviewer","password":"change-me"}'
+docker compose down -v
 ```
 
-El JWT se devuelve en `data.accessToken`. Usalo como `Authorization: Bearer <token>` en los endpoints de negocio. La API valida firma HS256, expiracion, issuer y audience.
+## Credenciales demo
 
-## Rutas principales
+Las credenciales configuradas por `.env.example` son:
 
-Todos los endpoints de negocio requieren JWT.
+| Campo | Valor |
+| --- | --- |
+| Usuario | `reviewer` |
+| Contraseña | `reviewer123` |
 
-- `POST /api/auth/login`
-- `POST`, `GET` `/api/franchises`
-- `GET /api/franchises/{franchiseId}`
-- `PATCH /api/franchises/{franchiseId}/name`
-- `POST`, `GET` `/api/branches`
-- `GET /api/branches/{branchId}`
-- `PATCH /api/branches/{branchId}/name`
-- `POST`, `GET` `/api/products`
-- `GET`, `PATCH`, `DELETE /api/products/{productId}`
-- `GET /api/products/max-stock?franchiseId={franchiseId}`
+Son credenciales ficticias para evaluación local. No deben reutilizarse en producción.
 
-## Swagger y health
+## Autenticación
 
-Son publicos:
+El endpoint de login es público. Ejecuta:
 
-- Swagger UI: `http://localhost:8080/swagger-ui.html`
-- OpenAPI: `http://localhost:8080/v3/api-docs`
-- Health: `http://localhost:8080/actuator/health`
+```http
+POST /api/auth/login
+```
 
-Swagger documenta el esquema `bearerAuth` para probar endpoints protegidos.
+Body JSON:
+
+```json
+{
+  "username": "reviewer",
+  "password": "reviewer123"
+}
+```
+
+Con curl en Linux/macOS:
+
+```bash
+curl --request POST http://localhost:8080/api/auth/login \
+  --header 'Content-Type: application/json' \
+  --data '{"username":"reviewer","password":"reviewer123"}'
+```
+
+Con Windows PowerShell:
+
+```powershell
+curl.exe --request POST http://localhost:8080/api/auth/login `
+  --header "Content-Type: application/json" `
+  --data '{"username":"reviewer","password":"reviewer123"}'
+```
+
+La respuesta tiene esta forma y el token está en `data.accessToken`:
+
+```json
+{
+  "success": true,
+  "message": "Autenticación exitosa",
+  "data": {
+    "accessToken": "eyJ...",
+    "tokenType": "Bearer",
+    "expiresIn": 1800
+  }
+}
+```
+
+Para usar Swagger:
+
+1. Ejecuta `POST /api/auth/login` desde Swagger con las credenciales demo.
+2. Copia únicamente el valor de `data.accessToken`, sin comillas.
+3. Pulsa el botón **Authorize** en la parte superior de Swagger UI.
+4. En el cuadro de `bearerAuth`, introduce el token. Swagger agrega el esquema `Bearer` automáticamente.
+5. Pulsa **Authorize** y cierra el cuadro.
+6. Ejecuta ahora los endpoints protegidos de franquicias, sucursales y productos.
+
+Para curl, envía el token como `Authorization: Bearer <TOKEN>` y reemplaza `<TOKEN>` por el valor copiado desde `data.accessToken`.
+
+## Ejemplo de uso
+
+Todos los endpoints de esta sección requieren el header:
+
+```text
+Authorization: Bearer <TOKEN>
+```
+
+Los ids no se inventan: después de cada creación, copia el campo `data.id` de la respuesta y reemplaza los marcadores en el siguiente comando.
+
+### 1. Crear una franquicia
+
+```bash
+curl --request POST http://localhost:8080/api/franchises \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"name":"Franchise Demo"}'
+```
+
+Guarda el `data.id` de la respuesta como `franchiseId`.
+
+### 2. Crear una sucursal
+
+Reemplaza `<FRANCHISE_ID>` por el id retornado en el paso anterior.
+
+```bash
+curl --request POST http://localhost:8080/api/branches \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"franchiseId":"<FRANCHISE_ID>","name":"Sucursal Centro"}'
+```
+
+Guarda el `data.id` de la respuesta como `branchId`.
+
+### 3. Crear el producto A con stock menor
+
+```bash
+curl --request POST http://localhost:8080/api/products \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"branchId":"<BRANCH_ID>","name":"Producto A","stock":10}'
+```
+
+Guarda su `data.id` como `productAId`.
+
+### 4. Crear el producto B con stock mayor
+
+```bash
+curl --request POST http://localhost:8080/api/products \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"branchId":"<BRANCH_ID>","name":"Producto B","stock":25}'
+```
+
+Guarda su `data.id` como `productBId`.
+
+### 5. Listar productos de la sucursal
+
+```bash
+curl --request GET 'http://localhost:8080/api/products?branchId=<BRANCH_ID>' \
+  --header 'Authorization: Bearer <TOKEN>'
+```
+
+La respuesta debe incluir los dos productos y sus stocks actuales.
+
+### 6. Modificar el stock
+
+Reemplaza `<PRODUCT_A_ID>` por el id real del producto A:
+
+```bash
+curl --request PATCH http://localhost:8080/api/products/<PRODUCT_A_ID>/stock \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"stock":30}'
+```
+
+### 7. Renombrar la franquicia
+
+```bash
+curl --request PATCH http://localhost:8080/api/franchises/<FRANCHISE_ID>/name \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"name":"Franchise Demo Renamed"}'
+```
+
+### 8. Renombrar la sucursal
+
+```bash
+curl --request PATCH http://localhost:8080/api/branches/<BRANCH_ID>/name \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"name":"Sucursal Centro Renamed"}'
+```
+
+### 9. Renombrar el producto
+
+```bash
+curl --request PATCH http://localhost:8080/api/products/<PRODUCT_B_ID>/name \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"name":"Producto B Renamed"}'
+```
+
+### 10. Consultar el producto con mayor stock por sucursal
+
+```bash
+curl --request GET 'http://localhost:8080/api/products/max-stock?franchiseId=<FRANCHISE_ID>' \
+  --header 'Authorization: Bearer <TOKEN>'
+```
+
+La respuesta contiene una entrada por sucursal con `branchId`, `branchName`, `productId`, `productName` y `stock`. Con los valores anteriores, el resultado debe identificar el producto que tenga el stock más alto en cada sucursal.
+
+### 11. Eliminar un producto
+
+```bash
+curl --request DELETE http://localhost:8080/api/products/<PRODUCT_B_ID> \
+  --header 'Authorization: Bearer <TOKEN>'
+```
+
+La API responde con HTTP `204 No Content`.
+
+## Swagger y endpoints
+
+| Método | Endpoint | Protección |
+| --- | --- | --- |
+| `POST` | `/api/auth/login` | Público |
+| `POST`, `GET` | `/api/franchises` | JWT |
+| `GET` | `/api/franchises/{franchiseId}` | JWT |
+| `PATCH` | `/api/franchises/{franchiseId}/name` | JWT |
+| `POST`, `GET` | `/api/branches` | JWT |
+| `GET` | `/api/branches/{branchId}` | JWT |
+| `PATCH` | `/api/branches/{branchId}/name` | JWT |
+| `POST`, `GET` | `/api/products` | JWT |
+| `GET` | `/api/products/{productId}` | JWT |
+| `PATCH` | `/api/products/{productId}/stock` | JWT |
+| `PATCH` | `/api/products/{productId}/name` | JWT |
+| `DELETE` | `/api/products/{productId}` | JWT |
+| `GET` | `/api/products/max-stock?franchiseId={id}` | JWT |
+
+Documentación interactiva: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html).
+
+OpenAPI JSON: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs).
+
+Health: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health).
+
+## Ejecución local sin Docker
+
+Requisitos: Java 21, Maven Wrapper y MongoDB ejecutándose en `localhost:27017`.
+
+Windows PowerShell:
+
+```powershell
+$env:MONGODB_URI="mongodb://localhost:27017/franchise_hub"
+$env:JWT_SECRET="local-only-example-secret-for-franchise-hub-32-bytes"
+$env:JWT_ISSUER="franchise-hub"
+$env:JWT_AUDIENCE="franchise-hub-api"
+$env:JWT_EXPIRATION="PT30M"
+$env:FRANCHISE_APP_USERNAME="reviewer"
+$env:FRANCHISE_APP_PASSWORD="reviewer123"
+.\mvnw.cmd spring-boot:run
+```
+
+Linux/macOS:
+
+```bash
+export MONGODB_URI="mongodb://localhost:27017/franchise_hub"
+export JWT_SECRET="local-only-example-secret-for-franchise-hub-32-bytes"
+export JWT_ISSUER="franchise-hub"
+export JWT_AUDIENCE="franchise-hub-api"
+export JWT_EXPIRATION="PT30M"
+export FRANCHISE_APP_USERNAME="reviewer"
+export FRANCHISE_APP_PASSWORD="reviewer123"
+./mvnw spring-boot:run
+```
+
+La API queda disponible en `http://localhost:8080`.
 
 ## Tests
 
-Tests locales:
+### Sin Docker disponible
+
+Windows PowerShell:
 
 ```powershell
 .\mvnw.cmd clean test
+```
+
+Linux/macOS:
+
+```bash
+./mvnw clean test
+```
+
+Si Docker no está disponible, los 5 tests de integración de MongoDB pueden quedar skipped. El estado local validado en ese escenario fue 68 tests, 0 failures y 0 errors.
+
+### Con Docker disponible
+
+Windows PowerShell:
+
+```powershell
+.\mvnw.cmd clean test
+```
+
+Linux/macOS:
+
+```bash
+./mvnw clean test
+```
+
+Testcontainers inicia MongoDB real usando `mongo:8.0`. El estado validado actualmente es 68 tests, 0 failures, 0 errors y 0 skipped cuando Docker está disponible. La comprobación de CI exige explícitamente que no haya tests skipped.
+
+Quality gate y package:
+
+```powershell
+.\mvnw.cmd checkstyle:check
 .\mvnw.cmd clean package
 ```
 
-Los tests de persistencia usan Testcontainers y requieren Docker. Sin Docker, esos tests pueden quedar skipped; con Docker disponible deben ejecutarse sobre MongoDB real.
+```bash
+./mvnw checkstyle:check
+./mvnw clean package
+```
+
+## Integración continua
+
+GitHub Actions corre en cada Pull Request y push dirigido a `dev` o `main`.
+
+El workflow valida, en steps separados y visibles:
+
+- Java 21 y Maven Wrapper.
+- Checkstyle como quality/style gate; el job falla si el check falla.
+- Compilación.
+- Tests unitarios, reactivos y de seguridad incluidos en la suite Maven.
+- Persistencia con MongoDB real mediante Testcontainers y `mongo:8.0`.
+- Cero failures, errors y skipped en los reportes de CI.
+- Package y existencia del JAR generado.
+- Construcción obligatoria de la imagen Docker.
+- Smoke runtime de la imagen construida: health `UP`, login exitoso y `GET /api/franchises` autenticado.
+- Limpieza de contenedores y red temporal incluso si el smoke test falla.
+
+El workflow no publica imágenes, no crea infraestructura cloud y no realiza despliegues.
 
 ## Arquitectura
 
-El proyecto aplica Clean Architecture de forma pragmatica:
+El proyecto aplica Clean Architecture con separación de responsabilidades:
+
+- `presentation`: controllers WebFlux, DTOs HTTP y manejo de errores.
+- `application`: casos de uso, handlers y contratos de repositorio.
+- `domain`: entidades y reglas de negocio, sin dependencias de Spring o MongoDB.
+- `infrastructure`: adaptadores MongoDB reactivos, seguridad JWT y configuración.
+
+Flujo principal de una operación persistente:
 
 ```text
-presentation -> application -> domain
-infrastructure -> application/domain
+HTTP
+  ↓
+Controller
+  ↓
+Handler
+  ↓
+Repository Port
+  ↓
+Mongo Adapter
+  ↓
+ReactiveMongoRepository
+  ↓
+MongoDB
 ```
 
-Domain no depende de Spring, MongoDB ni HTTP. Application orquesta casos de uso y contratos. Infrastructure implementa persistencia y seguridad. Presentation expone WebFlux y transforma los contratos HTTP.
+La cadena conserva reactividad desde WebFlux hasta Spring Data Reactive MongoDB.
+
+## Variables de entorno
+
+| Variable | Obligatoria | Descripción |
+| --- | --- | --- |
+| `JWT_SECRET` | Sí | Secreto HMAC de al menos 32 bytes. Usar uno diferente en producción. |
+| `FRANCHISE_APP_USERNAME` | Sí | Usuario configurado para el login demo. |
+| `FRANCHISE_APP_PASSWORD` | Sí | Contraseña configurada para el login demo. |
+| `MONGODB_URI` | No | URI MongoDB; por defecto `mongodb://localhost:27017/franchise_hub`. Compose usa su servicio interno. |
+| `JWT_ISSUER` | No | Emisor JWT; por defecto `franchise-hub`. |
+| `JWT_AUDIENCE` | No | Audiencia JWT; por defecto `franchise-hub-api`. |
+| `JWT_EXPIRATION` | No | Duración JWT; por defecto `PT30M`. |
+
+`.env` es sólo para ejecución local y no debe versionarse. No almacenar secretos reales, claves AWS, tokens ni contraseñas de producción en este repositorio.
+
+## Persistencia
+
+La ejecución Docker usa MongoDB en el servicio `mongo` y conserva los datos en el volumen `franchise_mongo_data`. `docker compose down` conserva el volumen; `docker compose down -v` lo elimina.
+
+La integración de persistencia se prueba con Testcontainers y MongoDB real. La configuración cloud definitiva no se necesita para ejecutar o evaluar localmente esta API.
+
+## Próximo/despliegue cloud
+
+La fase de AWS/Terraform se trabaja por separado. Este PR no crea recursos cloud, no publica imágenes en ECR y no inventa una URL de despliegue.

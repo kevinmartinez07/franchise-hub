@@ -135,7 +135,12 @@ class FranchiseHandlersTest {
         private final Map<String, Franchise> data = new LinkedHashMap<>();
         private Franchise saved;
         private int saveCalls;
-        public Mono<Franchise> save(Franchise value) { data.put(value.getId(), value); saved = value; saveCalls++; return Mono.just(value); }
+        public Mono<Franchise> save(Franchise value) {
+            data.put(value.getId(), value);
+            saved = value;
+            saveCalls++;
+            return Mono.just(value);
+        }
         public Flux<Franchise> findAll() { return Flux.fromIterable(data.values()); }
         public Mono<Franchise> findById(String id) { return Mono.justOrEmpty(data.get(id)); }
     }
@@ -145,7 +150,9 @@ class FranchiseHandlersTest {
         public Mono<Branch> save(Branch value) { data.put(value.getId(), value); return Mono.just(value); }
         public Flux<Branch> findAll() { return Flux.fromIterable(data.values()); }
         public Mono<Branch> findById(String id) { return Mono.justOrEmpty(data.get(id)); }
-        public Flux<Branch> findByFranchiseId(String id) { return Flux.fromIterable(data.values()).filter(v -> v.getFranchiseId().equals(id)); }
+        public Flux<Branch> findByFranchiseId(String id) {
+            return Flux.fromIterable(data.values()).filter(v -> v.getFranchiseId().equals(id));
+        }
     }
 
     private static final class InMemoryProductRepository implements ProductRepository {
@@ -155,6 +162,10 @@ class FranchiseHandlersTest {
         public Mono<Product> findById(String id) { return Mono.justOrEmpty(data.get(id)); }
         public Flux<Product> findByBranchId(String id) { return Flux.fromIterable(data.values()).filter(v -> v.getBranchId().equals(id)); }
         public Mono<Void> deleteById(String id) { data.remove(id); return Mono.empty(); }
-        public Mono<Product> findMaxStockByBranchId(String id) { return findByBranchId(id).sort((a, b) -> Integer.compare(b.getStock(), a.getStock())).next(); }
+        public Mono<Product> findMaxStockByBranchId(String id) {
+            return findByBranchId(id)
+                    .sort((a, b) -> Integer.compare(b.getStock(), a.getStock()))
+                    .next();
+        }
     }
 }

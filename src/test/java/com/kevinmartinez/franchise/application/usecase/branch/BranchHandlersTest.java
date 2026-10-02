@@ -127,6 +127,8 @@ class BranchHandlersTest {
         public Mono<Branch> save(Branch value) { saveCalls++; data.put(value.getId(), value); return Mono.just(value); }
         public Flux<Branch> findAll() { return Flux.fromIterable(data.values()); }
         public Mono<Branch> findById(String id) { return Mono.justOrEmpty(data.get(id)); }
-        public Flux<Branch> findByFranchiseId(String id) { return Flux.fromIterable(data.values()).filter(v -> v.getFranchiseId().equals(id)); }
+        public Flux<Branch> findByFranchiseId(String id) {
+            return Flux.fromIterable(data.values()).filter(v -> v.getFranchiseId().equals(id));
+        }
     }
 }
