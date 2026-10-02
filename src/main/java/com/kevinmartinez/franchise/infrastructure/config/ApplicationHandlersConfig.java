@@ -5,15 +5,18 @@ import com.kevinmartinez.franchise.application.repository.FranchiseRepository;
 import com.kevinmartinez.franchise.application.repository.ProductRepository;
 import com.kevinmartinez.franchise.application.usecase.branch.commands.handler.AddBranchHandler;
 import com.kevinmartinez.franchise.application.usecase.branch.commands.handler.RenameBranchHandler;
+import com.kevinmartinez.franchise.application.usecase.branch.queries.handler.GetBranchByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.branch.queries.handler.GetBranchesHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.commands.handler.CreateFranchiseHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.commands.handler.RenameFranchiseHandler;
+import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchiseByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetMaxStockProductsByFranchiseHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchisesHandler;
 import com.kevinmartinez.franchise.application.usecase.product.commands.handler.AddProductHandler;
 import com.kevinmartinez.franchise.application.usecase.product.commands.handler.DeleteProductHandler;
 import com.kevinmartinez.franchise.application.usecase.product.commands.handler.RenameProductHandler;
 import com.kevinmartinez.franchise.application.usecase.product.commands.handler.UpdateProductStockHandler;
+import com.kevinmartinez.franchise.application.usecase.product.queries.handler.GetProductByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.product.queries.handler.GetProductsHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,6 +40,11 @@ public class ApplicationHandlersConfig {
     }
 
     @Bean
+    GetFranchiseByIdHandler getFranchiseByIdHandler(FranchiseRepository repository) {
+        return new GetFranchiseByIdHandler(repository);
+    }
+
+    @Bean
     AddBranchHandler addBranchHandler(
             FranchiseRepository franchiseRepository,
             BranchRepository branchRepository) {
@@ -53,6 +61,11 @@ public class ApplicationHandlersConfig {
             BranchRepository branchRepository,
             FranchiseRepository franchiseRepository) {
         return new GetBranchesHandler(branchRepository, franchiseRepository);
+    }
+
+    @Bean
+    GetBranchByIdHandler getBranchByIdHandler(BranchRepository repository) {
+        return new GetBranchByIdHandler(repository);
     }
 
     @Bean
@@ -82,6 +95,11 @@ public class ApplicationHandlersConfig {
             ProductRepository productRepository,
             BranchRepository branchRepository) {
         return new GetProductsHandler(productRepository, branchRepository);
+    }
+
+    @Bean
+    GetProductByIdHandler getProductByIdHandler(ProductRepository repository) {
+        return new GetProductByIdHandler(repository);
     }
 
     @Bean

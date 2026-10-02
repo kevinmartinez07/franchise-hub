@@ -9,6 +9,7 @@ import com.kevinmartinez.franchise.application.usecase.branch.commands.handler.R
 import com.kevinmartinez.franchise.application.usecase.branch.dto.BranchDto;
 import com.kevinmartinez.franchise.application.usecase.branch.queries.GetBranchByIdQuery;
 import com.kevinmartinez.franchise.application.usecase.branch.queries.GetBranchesQuery;
+import com.kevinmartinez.franchise.application.usecase.branch.queries.handler.GetBranchByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.branch.queries.handler.GetBranchesHandler;
 import com.kevinmartinez.franchise.presentation.dto.request.UpdateNameRequest;
 import com.kevinmartinez.franchise.presentation.dto.response.ApiResponse;
@@ -35,14 +36,17 @@ public class BranchController {
     private final AddBranchHandler addBranchHandler;
     private final RenameBranchHandler renameBranchHandler;
     private final GetBranchesHandler getBranchesHandler;
+    private final GetBranchByIdHandler getBranchByIdHandler;
 
     public BranchController(
             AddBranchHandler addBranchHandler,
             RenameBranchHandler renameBranchHandler,
-            GetBranchesHandler getBranchesHandler) {
+            GetBranchesHandler getBranchesHandler,
+            GetBranchByIdHandler getBranchByIdHandler) {
         this.addBranchHandler = addBranchHandler;
         this.renameBranchHandler = renameBranchHandler;
         this.getBranchesHandler = getBranchesHandler;
+        this.getBranchByIdHandler = getBranchByIdHandler;
     }
 
     @PostMapping
@@ -65,7 +69,7 @@ public class BranchController {
     @GetMapping("/{branchId}")
     @Operation(summary = "Get branch by id")
     public Mono<ApiResponse<BranchDto>> getById(@PathVariable String branchId) {
-        return getBranchesHandler.handle(new GetBranchByIdQuery(branchId))
+        return getBranchByIdHandler.handle(new GetBranchByIdQuery(branchId))
                 .map(response -> ApiResponse.success("Sucursal consultada correctamente", response));
     }
 

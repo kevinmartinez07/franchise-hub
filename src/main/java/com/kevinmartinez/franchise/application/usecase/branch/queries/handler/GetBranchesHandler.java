@@ -6,7 +6,6 @@ import com.kevinmartinez.franchise.application.exception.ResourceNotFoundExcepti
 import com.kevinmartinez.franchise.application.repository.BranchRepository;
 import com.kevinmartinez.franchise.application.repository.FranchiseRepository;
 import com.kevinmartinez.franchise.application.usecase.branch.dto.BranchDto;
-import com.kevinmartinez.franchise.application.usecase.branch.queries.GetBranchByIdQuery;
 import com.kevinmartinez.franchise.application.usecase.branch.queries.GetBranchesQuery;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -30,14 +29,6 @@ public class GetBranchesHandler {
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException(
                         "No se encontró la franquicia con id: " + query.franchiseId())))
                 .flatMapMany(franchise -> branchRepository.findByFranchiseId(query.franchiseId()))
-                .map(BranchDto::from);
-    }
-
-    public Mono<BranchDto> handle(GetBranchByIdQuery query) {
-        Objects.requireNonNull(query, "La consulta no puede ser nula");
-        return branchRepository.findById(query.branchId())
-                .switchIfEmpty(Mono.error(new ResourceNotFoundException(
-                        "No se encontró la sucursal con id: " + query.branchId())))
                 .map(BranchDto::from);
     }
 }
