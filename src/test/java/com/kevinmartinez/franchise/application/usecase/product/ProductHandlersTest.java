@@ -20,6 +20,7 @@ import com.kevinmartinez.franchise.application.usecase.product.commands.handler.
 import com.kevinmartinez.franchise.application.usecase.product.commands.handler.UpdateProductStockHandler;
 import com.kevinmartinez.franchise.application.usecase.product.queries.GetProductByIdQuery;
 import com.kevinmartinez.franchise.application.usecase.product.queries.GetProductsQuery;
+import com.kevinmartinez.franchise.application.usecase.product.queries.handler.GetProductByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.product.queries.handler.GetProductsHandler;
 import com.kevinmartinez.franchise.domain.model.Branch;
 import com.kevinmartinez.franchise.domain.model.Product;
@@ -36,7 +37,11 @@ class ProductHandlersTest {
         BranchFake branches = new BranchFake(); ProductFake products = new ProductFake();
         branches.data.put("br-1", Branch.create("br-1", "fr-1", "North", NOW));
         StepVerifier.create(new AddProductHandler(branches, products).handle(new AddProductCommand("br-1", "Coffee", 10)))
-                .assertNext(product -> { assertEquals("br-1", product.branchId()); assertEquals(10, product.stock()); assertFalse(product.id().isBlank()); })
+                .assertNext(product -> {
+                    assertEquals("br-1", product.branchId());
+                    assertEquals(10, product.stock());
+                    assertFalse(product.id().isBlank());
+                })
                 .verifyComplete();
         assertEquals(1, products.saveCalls);
     }
@@ -140,13 +145,13 @@ class ProductHandlersTest {
     @Test
     void getProductByIdReturnsExistingProduct() {
         ProductFake products = new ProductFake(); products.data.put("p-1", Product.create("p-1", "br-1", "Coffee", 5, NOW));
-        StepVerifier.create(new GetProductsHandler(products, new BranchFake()).handle(new GetProductByIdQuery("p-1")))
+        StepVerifier.create(new GetProductByIdHandler(products).handle(new GetProductByIdQuery("p-1")))
                 .assertNext(product -> assertEquals("Coffee", product.name())).verifyComplete();
     }
 
     @Test
     void getProductByMissingIdReturnsNotFound() {
-        StepVerifier.create(new GetProductsHandler(new ProductFake(), new BranchFake()).handle(new GetProductByIdQuery("missing")))
+        StepVerifier.create(new GetProductByIdHandler(new ProductFake()).handle(new GetProductByIdQuery("missing")))
                 .expectError(ResourceNotFoundException.class).verify();
     }
 
@@ -155,7 +160,9 @@ class ProductHandlersTest {
         public Mono<Branch> save(Branch value) { data.put(value.getId(), value); return Mono.just(value); }
         public Flux<Branch> findAll() { return Flux.fromIterable(data.values()); }
         public Mono<Branch> findById(String id) { return Mono.justOrEmpty(data.get(id)); }
-        public Flux<Branch> findByFranchiseId(String id) { return Flux.fromIterable(data.values()).filter(v -> v.getFranchiseId().equals(id)); }
+        public Flux<Branch> findByFranchiseId(String id) {
+            return Flux.fromIterable(data.values()).filter(v -> v.getFranchiseId().equals(id));
+        }
     }
 
     private static final class ProductFake implements ProductRepository {
@@ -165,6 +172,10 @@ class ProductHandlersTest {
         public Mono<Product> findById(String id) { return Mono.justOrEmpty(data.get(id)); }
         public Flux<Product> findByBranchId(String id) { return Flux.fromIterable(data.values()).filter(v -> v.getBranchId().equals(id)); }
         public Mono<Void> deleteById(String id) { deleteCalls++; data.remove(id); return Mono.empty(); }
-        public Mono<Product> findMaxStockByBranchId(String id) { return findByBranchId(id).sort((a, b) -> Integer.compare(b.getStock(), a.getStock())).next(); }
+        public Mono<Product> findMaxStockByBranchId(String id) {
+            return findByBranchId(id)
+                    .sort((a, b) -> Integer.compare(b.getStock(), a.getStock()))
+                    .next();
+        }
     }
 }

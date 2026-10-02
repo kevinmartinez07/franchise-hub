@@ -15,6 +15,7 @@ import com.kevinmartinez.franchise.application.usecase.branch.commands.handler.A
 import com.kevinmartinez.franchise.application.usecase.branch.commands.handler.RenameBranchHandler;
 import com.kevinmartinez.franchise.application.usecase.branch.queries.GetBranchByIdQuery;
 import com.kevinmartinez.franchise.application.usecase.branch.queries.GetBranchesQuery;
+import com.kevinmartinez.franchise.application.usecase.branch.queries.handler.GetBranchByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.branch.queries.handler.GetBranchesHandler;
 import com.kevinmartinez.franchise.domain.model.Branch;
 import com.kevinmartinez.franchise.domain.model.Franchise;
@@ -103,13 +104,13 @@ class BranchHandlersTest {
     void getBranchByIdReturnsExistingBranch() {
         BranchFake branches = new BranchFake();
         branches.data.put("br-1", Branch.create("br-1", "fr-1", "North", NOW));
-        StepVerifier.create(new GetBranchesHandler(branches, new FranchiseFake()).handle(new GetBranchByIdQuery("br-1")))
+        StepVerifier.create(new GetBranchByIdHandler(branches).handle(new GetBranchByIdQuery("br-1")))
                 .assertNext(branch -> assertEquals("North", branch.name())).verifyComplete();
     }
 
     @Test
     void getBranchByMissingIdReturnsNotFound() {
-        StepVerifier.create(new GetBranchesHandler(new BranchFake(), new FranchiseFake())
+        StepVerifier.create(new GetBranchByIdHandler(new BranchFake())
                         .handle(new GetBranchByIdQuery("missing")))
                 .expectError(ResourceNotFoundException.class).verify();
     }
@@ -127,6 +128,8 @@ class BranchHandlersTest {
         public Mono<Branch> save(Branch value) { saveCalls++; data.put(value.getId(), value); return Mono.just(value); }
         public Flux<Branch> findAll() { return Flux.fromIterable(data.values()); }
         public Mono<Branch> findById(String id) { return Mono.justOrEmpty(data.get(id)); }
-        public Flux<Branch> findByFranchiseId(String id) { return Flux.fromIterable(data.values()).filter(v -> v.getFranchiseId().equals(id)); }
+        public Flux<Branch> findByFranchiseId(String id) {
+            return Flux.fromIterable(data.values()).filter(v -> v.getFranchiseId().equals(id));
+        }
     }
 }

@@ -9,6 +9,7 @@ import com.kevinmartinez.franchise.application.usecase.franchise.commands.handle
 import com.kevinmartinez.franchise.application.usecase.franchise.dto.FranchiseDto;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.GetFranchiseByIdQuery;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.GetFranchisesQuery;
+import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchiseByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchisesHandler;
 import com.kevinmartinez.franchise.presentation.dto.request.UpdateNameRequest;
 import com.kevinmartinez.franchise.presentation.dto.response.ApiResponse;
@@ -34,14 +35,17 @@ public class FranchiseController {
     private final CreateFranchiseHandler createFranchiseHandler;
     private final RenameFranchiseHandler renameFranchiseHandler;
     private final GetFranchisesHandler getFranchisesHandler;
+    private final GetFranchiseByIdHandler getFranchiseByIdHandler;
 
     public FranchiseController(
             CreateFranchiseHandler createFranchiseHandler,
             RenameFranchiseHandler renameFranchiseHandler,
-            GetFranchisesHandler getFranchisesHandler) {
+            GetFranchisesHandler getFranchisesHandler,
+            GetFranchiseByIdHandler getFranchiseByIdHandler) {
         this.createFranchiseHandler = createFranchiseHandler;
         this.renameFranchiseHandler = renameFranchiseHandler;
         this.getFranchisesHandler = getFranchisesHandler;
+        this.getFranchiseByIdHandler = getFranchiseByIdHandler;
     }
 
     @PostMapping
@@ -63,7 +67,7 @@ public class FranchiseController {
     @GetMapping("/{franchiseId}")
     @Operation(summary = "Get franchise by id")
     public Mono<ApiResponse<FranchiseDto>> getById(@PathVariable String franchiseId) {
-        return getFranchisesHandler.handle(new GetFranchiseByIdQuery(franchiseId))
+        return getFranchiseByIdHandler.handle(new GetFranchiseByIdQuery(franchiseId))
                 .map(response -> ApiResponse.success("Franquicia consultada correctamente", response));
     }
 

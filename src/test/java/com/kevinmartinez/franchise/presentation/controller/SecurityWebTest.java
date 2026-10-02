@@ -9,6 +9,7 @@ import com.kevinmartinez.franchise.application.usecase.franchise.commands.handle
 import com.kevinmartinez.franchise.application.usecase.franchise.commands.handler.RenameFranchiseHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.dto.FranchiseDto;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.GetFranchisesQuery;
+import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchiseByIdHandler;
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchisesHandler;
 import com.kevinmartinez.franchise.infrastructure.security.JwtTokenService;
 import com.kevinmartinez.franchise.infrastructure.security.SecurityConfig;
@@ -21,8 +22,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import reactor.core.publisher.Mono;
-
 @WebFluxTest(controllers = FranchiseController.class)
 @Import({SecurityConfig.class, GlobalExceptionHandler.class})
 @TestPropertySource(properties = {
@@ -46,6 +45,9 @@ class SecurityWebTest {
 
     @MockitoBean
     private GetFranchisesHandler getFranchisesHandler;
+
+    @MockitoBean
+    private GetFranchiseByIdHandler getFranchiseByIdHandler;
 
     @Test
     void protectedEndpointWithoutBearerReturns401() {

@@ -1,0 +1,13 @@
+aws_region = "us-east-1"
+app_name   = "franchise-hub"
+image_tag  = "latest"
+
+# Keep the ECS service at desired_count = 0 during bootstrap.
+enable_service = false
+
+# TF_VAR_atlas_org_id and TF_VAR_atlas_db_password are provided outside this file.
+atlas_org_id = "6abfe4803b197494864aab47"
+
+# Use the current public IP only for local evaluation. Do not enable public runtime by default.
+atlas_client_cidr          = "190.69.39.48/32"
+atlas_allow_public_runtime = false
