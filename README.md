@@ -37,6 +37,108 @@ HTTP -> presentation -> application -> repository port
 El flujo permanece reactivo desde WebFlux hasta MongoDB utilizando `Mono` y
 `Flux`.
 
+## Decisiones técnicas
+
+### Spring Boot y Java 21
+
+Spring Boot permite construir la API aprovechando el ecosistema de Spring para
+HTTP, validación, seguridad, persistencia y pruebas sin añadir configuración
+innecesaria. Java 21 se utiliza como versión LTS compatible con la versión de
+Spring Boot del proyecto.
+
+### WebFlux y Project Reactor
+
+La API utiliza un modelo reactivo: controllers y casos de uso trabajan con
+`Mono` y `Flux`, y Spring Data Reactive MongoDB mantiene el mismo modelo en la
+persistencia. Así se conserva un flujo no bloqueante desde HTTP hasta MongoDB.
+El objetivo no fue introducir complejidad por moda, sino mantener coherencia
+entre la capa HTTP y la persistencia reactiva.
+
+### MongoDB
+
+MongoDB es una alternativa permitida para la persistencia de la prueba y tiene
+integración reactiva directa mediante Spring Data. Localmente se ejecuta con
+Docker Compose y en cloud se utiliza MongoDB Atlas, manteniendo el mismo modelo
+de persistencia en ambos entornos.
+
+### Separación por capas
+
+Los controllers se ocupan de HTTP, Application coordina los casos de uso,
+Domain contiene entidades y reglas, e Infrastructure concentra detalles como
+MongoDB y seguridad. El dominio y los casos de uso no dependen directamente de
+los controllers ni de la implementación MongoDB. Los contratos de repositorio
+se definen fuera del adaptador MongoDB.
+
+### Commands, Queries y Handlers
+
+Los controllers delegan los casos de uso a handlers. Las operaciones de
+escritura y lectura se organizan mediante commands y queries para mantener los
+controllers enfocados en HTTP. Es una separación interna de responsabilidades:
+no se implementó un bus de mensajes, CQRS distribuido ni un componente
+Mediator.
+
+### JWT
+
+La prueba no solicita gestión de usuarios, por lo que no se implementaron
+registro, CRUD ni administración de usuarios. JWT se añadió para proteger los
+endpoints funcionales mediante un usuario técnico configurable con
+`FRANCHISE_APP_USERNAME` y `FRANCHISE_APP_PASSWORD`.
+
+El flujo es `POST /api/auth/login`, validación de credenciales, generación del
+JWT y uso posterior como Bearer Token. Esto permite demostrar autenticación sin
+ampliar el alcance con un módulo completo de usuarios.
+
+### Docker y Docker Compose
+
+Docker permite ejecutar el proyecto de forma reproducible. Docker Compose
+inicia MongoDB, construye la API y configura la comunicación entre ambos
+servicios, sin que el evaluador tenga que instalar Java, Maven y MongoDB para
+la ejecución local recomendada.
+
+### Testcontainers
+
+Los tests de integración de persistencia utilizan una instancia real de MongoDB
+en un contenedor. De esta forma no dependen de una base externa compartida, de
+datos existentes ni de una configuración manual de MongoDB para esos tests.
+
+### OpenAPI y Swagger
+
+Swagger permite inspeccionar endpoints, revisar requests y responses, ejecutar
+operaciones desde el navegador y probar JWT sin depender de Postman. La ruta
+`/v3/api-docs` corresponde a OpenAPI 3; no representa una versión v3 de la API
+de negocio.
+
+### Terraform
+
+Terraform define la infraestructura cloud como código. Esto documenta los
+recursos, evita depender sólo de configuraciones manuales en consola y permite
+revisar la infraestructura mediante archivos versionados.
+
+### ECR y ECS/Fargate
+
+La aplicación se empaqueta como imagen Docker, ECR almacena esa imagen y
+ECS/Fargate ejecuta el contenedor. Fargate permite ejecutar la task sin
+administrar directamente una instancia EC2.
+
+### AWS Secrets Manager
+
+Los valores sensibles del entorno desplegado no se incluyen en la imagen ni en
+el código. ECS los obtiene desde Secrets Manager, incluyendo `MONGODB_URI`,
+`JWT_SECRET`, `FRANCHISE_APP_USERNAME` y `FRANCHISE_APP_PASSWORD`.
+
+### CI/CD
+
+GitHub Actions valida el código. CodePipeline orquesta el despliegue desde
+`main`, CodeBuild ejecuta la construcción, pruebas y publicación de la imagen,
+ECR almacena la imagen y ECS/Fargate ejecuta la nueva versión.
+
+```text
+main -> CodePipeline -> CodeBuild -> ECR -> ECS/Fargate
+```
+
+La separación permite que los cambios superen las validaciones antes de llegar
+al despliegue.
+
 ## Requisitos previos
 
 ### Opción recomendada: Docker
