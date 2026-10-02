@@ -12,6 +12,8 @@ import com.kevinmartinez.franchise.application.usecase.branch.queries.GetBranche
 import com.kevinmartinez.franchise.application.usecase.branch.queries.handler.GetBranchesHandler;
 import com.kevinmartinez.franchise.presentation.dto.request.UpdateNameRequest;
 import com.kevinmartinez.franchise.presentation.dto.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +29,7 @@ import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/api/branches")
+@SecurityRequirement(name = "bearerAuth")
 public class BranchController {
 
     private final AddBranchHandler addBranchHandler;
@@ -44,12 +47,14 @@ public class BranchController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create branch")
     public Mono<ApiResponse<BranchDto>> create(@Valid @RequestBody AddBranchCommand command) {
         return addBranchHandler.handle(command)
                 .map(response -> ApiResponse.success("Sucursal creada correctamente", response));
     }
 
     @GetMapping
+    @Operation(summary = "Get branches")
     public Mono<ApiResponse<List<BranchDto>>> getAll(
             @RequestParam(required = false) String franchiseId) {
         return getBranchesHandler.handle(new GetBranchesQuery(franchiseId))
@@ -58,12 +63,14 @@ public class BranchController {
     }
 
     @GetMapping("/{branchId}")
+    @Operation(summary = "Get branch by id")
     public Mono<ApiResponse<BranchDto>> getById(@PathVariable String branchId) {
         return getBranchesHandler.handle(new GetBranchByIdQuery(branchId))
                 .map(response -> ApiResponse.success("Sucursal consultada correctamente", response));
     }
 
     @PatchMapping("/{branchId}/name")
+    @Operation(summary = "Rename branch")
     public Mono<ApiResponse<BranchDto>> rename(
             @PathVariable String branchId,
             @Valid @RequestBody UpdateNameRequest request) {

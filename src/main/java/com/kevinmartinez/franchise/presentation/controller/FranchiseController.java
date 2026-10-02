@@ -12,6 +12,8 @@ import com.kevinmartinez.franchise.application.usecase.franchise.queries.GetFran
 import com.kevinmartinez.franchise.application.usecase.franchise.queries.handler.GetFranchisesHandler;
 import com.kevinmartinez.franchise.presentation.dto.request.UpdateNameRequest;
 import com.kevinmartinez.franchise.presentation.dto.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +28,7 @@ import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/api/franchises")
+@SecurityRequirement(name = "bearerAuth")
 public class FranchiseController {
 
     private final CreateFranchiseHandler createFranchiseHandler;
@@ -43,12 +46,14 @@ public class FranchiseController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create franchise")
     public Mono<ApiResponse<FranchiseDto>> create(@Valid @RequestBody CreateFranchiseCommand command) {
         return createFranchiseHandler.handle(command)
                 .map(response -> ApiResponse.success("Franquicia creada correctamente", response));
     }
 
     @GetMapping
+    @Operation(summary = "Get all franchises")
     public Mono<ApiResponse<List<FranchiseDto>>> getAll() {
         return getFranchisesHandler.handle(new GetFranchisesQuery())
                 .collectList()
@@ -56,12 +61,14 @@ public class FranchiseController {
     }
 
     @GetMapping("/{franchiseId}")
+    @Operation(summary = "Get franchise by id")
     public Mono<ApiResponse<FranchiseDto>> getById(@PathVariable String franchiseId) {
         return getFranchisesHandler.handle(new GetFranchiseByIdQuery(franchiseId))
                 .map(response -> ApiResponse.success("Franquicia consultada correctamente", response));
     }
 
     @PatchMapping("/{franchiseId}/name")
+    @Operation(summary = "Rename franchise")
     public Mono<ApiResponse<FranchiseDto>> rename(
             @PathVariable String franchiseId,
             @Valid @RequestBody UpdateNameRequest request) {

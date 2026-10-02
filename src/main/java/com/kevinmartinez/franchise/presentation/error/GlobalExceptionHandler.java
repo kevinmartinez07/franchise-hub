@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
@@ -64,6 +65,16 @@ public class GlobalExceptionHandler {
                 "Solicitud inválida",
                 "No fue posible interpretar la solicitud",
                 "INVALID_REQUEST",
+                exchange);
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    ProblemDetail handleBadCredentials(BadCredentialsException exception, ServerWebExchange exchange) {
+        return problem(
+                HttpStatus.UNAUTHORIZED,
+                "No autenticado",
+                "Usuario o contraseña inválidos",
+                "UNAUTHORIZED",
                 exchange);
     }
 

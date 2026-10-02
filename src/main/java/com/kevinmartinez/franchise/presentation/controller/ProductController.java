@@ -21,6 +21,8 @@ import com.kevinmartinez.franchise.presentation.dto.request.AddProductRequest;
 import com.kevinmartinez.franchise.presentation.dto.request.UpdateNameRequest;
 import com.kevinmartinez.franchise.presentation.dto.request.UpdateStockRequest;
 import com.kevinmartinez.franchise.presentation.dto.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -37,6 +39,7 @@ import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/api/products")
+@SecurityRequirement(name = "bearerAuth")
 public class ProductController {
 
     private final AddProductHandler addProductHandler;
@@ -63,6 +66,7 @@ public class ProductController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create product")
     public Mono<ApiResponse<ProductDto>> create(@Valid @RequestBody AddProductRequest request) {
         return addProductHandler.handle(new AddProductCommand(
                         request.branchId(), request.name(), request.stock()))
@@ -70,6 +74,7 @@ public class ProductController {
     }
 
     @GetMapping
+    @Operation(summary = "Get products")
     public Mono<ApiResponse<List<ProductDto>>> getAll(
             @RequestParam(required = false) String branchId) {
         return getProductsHandler.handle(new GetProductsQuery(branchId))
@@ -78,6 +83,7 @@ public class ProductController {
     }
 
     @GetMapping("/max-stock")
+    @Operation(summary = "Get max stock product per branch")
     public Mono<ApiResponse<List<MaxStockProductDto>>> getMaxStockProducts(@RequestParam String franchiseId) {
         return maxStockHandler.handle(new GetMaxStockProductsByFranchiseQuery(franchiseId))
                 .collectList()
@@ -85,12 +91,14 @@ public class ProductController {
     }
 
     @GetMapping("/{productId}")
+    @Operation(summary = "Get product by id")
     public Mono<ApiResponse<ProductDto>> getById(@PathVariable String productId) {
         return getProductsHandler.handle(new GetProductByIdQuery(productId))
                 .map(response -> ApiResponse.success("Producto consultado correctamente", response));
     }
 
     @PatchMapping("/{productId}/stock")
+    @Operation(summary = "Update product stock")
     public Mono<ApiResponse<ProductDto>> updateStock(
             @PathVariable String productId,
             @Valid @RequestBody UpdateStockRequest request) {
@@ -99,6 +107,7 @@ public class ProductController {
     }
 
     @PatchMapping("/{productId}/name")
+    @Operation(summary = "Rename product")
     public Mono<ApiResponse<ProductDto>> rename(
             @PathVariable String productId,
             @Valid @RequestBody UpdateNameRequest request) {
@@ -108,6 +117,7 @@ public class ProductController {
 
     @DeleteMapping("/{productId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Delete product")
     public Mono<Void> delete(@PathVariable String productId) {
         return deleteProductHandler.handle(new DeleteProductCommand(productId));
     }
