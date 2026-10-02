@@ -465,6 +465,131 @@ La ejecución Docker usa MongoDB en el servicio `mongo` y conserva los datos en 
 
 La integración de persistencia se prueba con Testcontainers y MongoDB real. La configuración cloud definitiva no se necesita para ejecutar o evaluar localmente esta API.
 
-## Próximo/despliegue cloud
+## Despliegue AWS
 
-La fase de AWS/Terraform se trabaja por separado. Este PR no crea recursos cloud, no publica imágenes en ECR y no inventa una URL de despliegue.
+Esta sección prepara el despliegue, pero no afirma que exista una infraestructura AWS activa. La arquitectura prevista es:
+
+```text
+GitHub
+  ↓ GitHub Actions + OIDC
+Amazon ECR
+  ↓ imagen Docker
+AWS App Runner
+  ↓ MONGODB_URI mediante Secrets Manager
+MongoDB cloud, por ejemplo MongoDB Atlas
+```
+
+La aplicación mantiene MongoDB reactivo y recibe la conexión mediante `MONGODB_URI`. No se reemplaza MongoDB por DynamoDB, RDS o DocumentDB.
+
+### Prerrequisitos
+
+- Cuenta AWS con una región elegida, por defecto `us-east-1`.
+- AWS CLI configurado para las comprobaciones autorizadas.
+- Terraform `>= 1.7.0`.
+- Docker para construir la imagen.
+- Una instancia MongoDB cloud administrada fuera de este stack, por ejemplo MongoDB Atlas.
+- Cuatro secretos creados previamente en AWS Secrets Manager:
+  - `MONGODB_URI`: URI completa de MongoDB cloud.
+  - `JWT_SECRET`: secreto HMAC de al menos 32 bytes.
+  - `FRANCHISE_APP_USERNAME`: usuario de aplicación.
+  - `FRANCHISE_APP_PASSWORD`: contraseña de aplicación.
+
+Los valores de esos secretos no se guardan en Terraform, `terraform.tfvars`, README, GitHub Actions ni Git. Terraform recibe únicamente sus ARNs.
+
+### Estructura Terraform
+
+El directorio [`terraform/`](terraform/) contiene:
+
+- `ecr.tf`: repositorio privado `franchise-hub`, escaneo al publicar y lifecycle de imágenes.
+- `iam.tf`: roles de acceso ECR de App Runner, instancia App Runner, lectura de secretos y deploy OIDC.
+- `apprunner.tf`: servicio opcional con puerto `8080` y health check `/actuator/health`.
+- `variables.tf`: región, nombre, tag, ARNs de secretos y restricciones GitHub.
+- `outputs.tf`: URL ECR, URL/ARN App Runner y ARN del rol GitHub cuando están habilitados.
+- `terraform.tfvars.example`: valores de ejemplo sin secretos.
+
+`enable_service` es `false` por defecto para permitir preparar ECR y roles antes de que exista la primera imagen. `enable_github_actions_role` también es `false` por defecto hasta confirmar el proveedor OIDC de la cuenta.
+
+### Secrets Manager
+
+Crear los cuatro secretos fuera de Terraform, usando la consola AWS o un procedimiento operativo protegido. Como ejemplo de nombres, sin incluir valores en este repositorio:
+
+```text
+franchise-hub/prod/mongodb-uri
+franchise-hub/prod/jwt-secret
+franchise-hub/prod/app-username
+franchise-hub/prod/app-password
+```
+
+Después de crearlos, usar sus ARNs en una copia local de `terraform/terraform.tfvars`. No reemplazar los placeholders en `terraform.tfvars.example` ni hacer commit de `terraform.tfvars`.
+
+La policy del rol de instancia sólo permite `secretsmanager:GetSecretValue` sobre esos cuatro ARNs. App Runner recibe las referencias mediante `runtime_environment_secrets`; no recibe los valores en texto plano.
+
+### Validar infraestructura sin modificar AWS
+
+Desde la raíz del repositorio:
+
+```bash
+terraform fmt -recursive
+terraform fmt -check -recursive
+terraform -chdir=terraform init -backend=false
+terraform -chdir=terraform validate
+```
+
+Para revisar la identidad AWS sin cambiar recursos:
+
+```bash
+aws sts get-caller-identity
+aws configure get region
+```
+
+El workflow de CI ejecuta `fmt -check`, `init -backend=false` y `validate` sin credenciales AWS. `terraform plan` sólo debe ejecutarse con una configuración AWS válida y ARNs ficticios o reales ya autorizados; nunca debe guardarse un plan que contenga información sensible.
+
+### Primer despliegue y bootstrap
+
+ECR debe existir antes de subir la primera imagen y App Runner necesita una imagen válida antes de poder crear el servicio. La secuencia futura es:
+
+1. Crear MongoDB cloud y los cuatro secretos de Secrets Manager fuera de Terraform.
+2. Copiar `terraform/terraform.tfvars.example` a `terraform/terraform.tfvars` y completar sólo región, ARNs y configuración no sensible.
+3. Ejecutar `terraform init`, `terraform validate` y un `terraform plan` revisado.
+4. Aplicar Terraform con `enable_service=false` para crear ECR, roles y policies base. `terraform apply` modifica recursos y puede generar costos; no se ejecuta como parte de este PR.
+5. Construir y publicar manualmente la primera imagen con el repository URL del output ECR:
+
+```bash
+aws ecr get-login-password --region <AWS_REGION> | docker login --username AWS --password-stdin <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com
+docker build --tag <ECR_REPOSITORY_URL>:latest .
+docker push <ECR_REPOSITORY_URL>:latest
+```
+
+6. Cambiar `enable_service=true`, mantener `image_tag="latest"` y confirmar los cuatro ARNs.
+7. Ejecutar un nuevo plan y aplicar Terraform para crear App Runner.
+8. Revisar el output `apprunner_service_url` y validar `/actuator/health`.
+9. Configurar las variables del environment `production` de GitHub y usar el workflow CD manual para las siguientes versiones.
+
+No se debe intentar crear App Runner antes de publicar la primera imagen ni ejecutar la aplicación sin los cuatro secretos.
+
+### OIDC GitHub Actions
+
+Terraform puede crear el proveedor OIDC con `create_github_oidc_provider=true` si la cuenta no lo tiene, o recibir un ARN existente mediante `github_actions_oidc_provider_arn`. El rol de deploy sólo confía en:
+
+```text
+repo:kevinmartinez07/franchise-hub:ref:refs/heads/main
+```
+
+El rol tiene permisos limitados para publicar en el repositorio ECR, iniciar/actualizar el servicio App Runner y pasar únicamente los dos roles App Runner. El permiso `ecr:GetAuthorizationToken` usa `Resource="*"` porque AWS lo exige para esa API global; las operaciones restantes se limitan al repositorio o servicio de Franchise Hub.
+
+### Workflow CD manual
+
+`.github/workflows/cd.yml` sólo tiene el trigger `workflow_dispatch`; no se ejecuta automáticamente ni se ejecutó durante este PR. Antes de usarlo, crear las variables del environment `production`:
+
+| Variable | Valor |
+| --- | --- |
+| `AWS_REGION` | Región AWS elegida |
+| `AWS_DEPLOY_ROLE_ARN` | Output `github_actions_deploy_role_arn` |
+| `ECR_REPOSITORY` | `franchise-hub` |
+| `APP_RUNNER_SERVICE_ARN` | Output `apprunner_service_arn` |
+
+Al ejecutarse manualmente, el workflow configura credenciales mediante OIDC, construye la imagen, publica el tag del SHA seleccionado y actualiza `latest`, inicia el deployment App Runner y espera que `/actuator/health` responda `UP`. No coloca secretos de aplicación en la imagen ni en el workflow.
+
+### Terraform state y costos
+
+Este directorio no versiona `terraform.tfstate`, planes, `.terraform/` ni `terraform.tfvars`. Antes de aplicar en un entorno real se debe elegir un backend remoto protegido y revisar su costo, bloqueo y permisos. Las operaciones `terraform apply`, creación de roles IAM, ECR, App Runner y secretos pueden modificar AWS o generar costos; requieren autorización explícita y no forman parte de esta iteración.
