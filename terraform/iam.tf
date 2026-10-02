@@ -1,9 +1,9 @@
 locals {
   runtime_secret_arns = {
-    MONGODB_URI              = var.mongodb_uri_secret_arn
-    JWT_SECRET               = var.jwt_secret_arn
-    FRANCHISE_APP_USERNAME   = var.franchise_app_username_secret_arn
-    FRANCHISE_APP_PASSWORD   = var.franchise_app_password_secret_arn
+    MONGODB_URI            = var.mongodb_uri_secret_arn
+    JWT_SECRET             = var.jwt_secret_arn
+    FRANCHISE_APP_USERNAME = var.franchise_app_username_secret_arn
+    FRANCHISE_APP_PASSWORD = var.franchise_app_password_secret_arn
   }
 
   runtime_secrets_configured = alltrue([
