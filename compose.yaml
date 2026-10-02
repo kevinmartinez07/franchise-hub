@@ -1,0 +1,32 @@
+services:
+  mongo:
+    image: ${MONGO_IMAGE:-mongo:8.0}
+    restart: unless-stopped
+    volumes:
+      - franchise_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "if command -v mongosh >/dev/null 2>&1; then mongosh --quiet --eval \"quit(db.adminCommand('ping').ok ? 0 : 2)\"; else mongo --quiet --eval \"quit(db.adminCommand('ping').ok ? 0 : 2)\"; fi"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build:
+      context: .
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/franchise_hub
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be defined}
+      JWT_ISSUER: ${JWT_ISSUER:-franchise-hub}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-franchise-hub-api}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-PT30M}
+      FRANCHISE_APP_USERNAME: ${FRANCHISE_APP_USERNAME:?FRANCHISE_APP_USERNAME must be defined}
+      FRANCHISE_APP_PASSWORD: ${FRANCHISE_APP_PASSWORD:?FRANCHISE_APP_PASSWORD must be defined}
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  franchise_mongo_data:
