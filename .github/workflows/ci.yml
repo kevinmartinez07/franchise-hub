@@ -16,14 +16,6 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    env:
-      JWT_SECRET: ci-only-franchise-hub-secret-with-more-than-32-bytes
-      JWT_ISSUER: franchise-hub
-      JWT_AUDIENCE: franchise-hub-api
-      JWT_EXPIRATION: PT30M
-      FRANCHISE_APP_USERNAME: ci-reviewer
-      FRANCHISE_APP_PASSWORD: ci-test-password
-      TEST_MONGO_IMAGE: mongo:8.0
 
     steps:
       - name: Checkout
@@ -42,7 +34,28 @@ jobs:
       - name: Compile
         run: ./mvnw -DskipTests compile
 
+      - name: Mask CI test configuration
+        run: |
+          jwt_secret="ci-only-$(printf '%s' 'franchise-hub-secret-with-more-than-32-bytes')"
+          username="ci-$(printf '%s' 'reviewer')"
+          password="ci-$(printf '%s' 'test-password')"
+          echo "::add-mask::$jwt_secret"
+          echo "::add-mask::franchise-hub"
+          echo "::add-mask::franchise-hub-api"
+          echo "::add-mask::PT30M"
+          echo "::add-mask::$username"
+          echo "::add-mask::$password"
+          echo "::add-mask::mongo:8.0"
+
       - name: Run tests with real MongoDB Testcontainers
+        env:
+          JWT_SECRET: ci-only-franchise-hub-secret-with-more-than-32-bytes
+          JWT_ISSUER: franchise-hub
+          JWT_AUDIENCE: franchise-hub-api
+          JWT_EXPIRATION: PT30M
+          FRANCHISE_APP_USERNAME: ci-reviewer
+          FRANCHISE_APP_PASSWORD: ci-test-password
+          TEST_MONGO_IMAGE: mongo:8.0
         run: ./mvnw clean test
 
       - name: Verify MongoDB integration test was not skipped
