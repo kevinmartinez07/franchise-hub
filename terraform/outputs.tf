@@ -28,7 +28,22 @@ output "atlas_cluster_name" {
   value       = mongodbatlas_advanced_cluster.app.name
 }
 
-output "github_actions_deploy_role_arn" {
-  description = "GitHub Actions OIDC deploy role ARN when enabled."
-  value       = try(aws_iam_role.github_actions_deploy[0].arn, null)
+output "codepipeline_name" {
+  description = "AWS CodePipeline V1 name."
+  value       = aws_codepipeline.app.name
+}
+
+output "codebuild_project_name" {
+  description = "AWS CodeBuild project name."
+  value       = aws_codebuild_project.app.name
+}
+
+output "github_connection_arn" {
+  description = "Pending AWS CodeConnections connection ARN for GitHub authorization."
+  value       = aws_codestarconnections_connection.github.arn
+}
+
+output "pipeline_artifact_bucket_name" {
+  description = "S3 bucket used for CodePipeline artifacts."
+  value       = aws_s3_bucket.pipeline_artifacts.bucket
 }
