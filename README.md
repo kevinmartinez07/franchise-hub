@@ -62,8 +62,9 @@ los controllers ni de la implementación MongoDB; los contratos de repositorio
 se definen fuera del adaptador.
 
 Los controllers delegan en handlers y las operaciones de lectura y escritura
-se organizan mediante queries y commands. Es una separación interna: no se
-implementó un bus de mensajes, CQRS distribuido ni un componente Mediator.
+se organizan mediante queries y commands. Commands y queries se utilizan
+únicamente para organizar los casos de uso dentro de la aplicación; no
+representan una implementación distribuida de CQRS.
 
 ### JWT
 
@@ -187,7 +188,11 @@ Usuario local: reviewer
 Contraseña local: reviewer123
 ```
 
-No cambies la URI local por una URI de producción para ejecutar esta guía.
+En ejecución con Docker Compose, la API utiliza internamente
+`mongodb://mongo:27017/franchise_hub`, porque `mongo` es el nombre del
+servicio dentro de la red de Compose. El valor
+`mongodb://localhost:27017/franchise_hub` de `.env.example` se utiliza como
+referencia para la ejecución local sin Docker.
 
 ### 3. Construir e iniciar la aplicación
 
@@ -257,9 +262,6 @@ La especificación OpenAPI está disponible en:
 ```text
 http://localhost:8080/v3/api-docs
 ```
-
-`/v3/api-docs` es la ruta de la especificación OpenAPI; no representa una
-versión `v3` de los endpoints de negocio.
 
 ### 7. Detener la aplicación
 
@@ -603,6 +605,3 @@ Los cambios del proyecto siguen este flujo:
 ```text
 feature / fix / chore / docs -> Pull Request -> dev -> Pull Request -> main
 ```
-
-El README describe la ejecución local y la evaluación del estado desplegado,
-pero no contiene credenciales reales ni tokens.
